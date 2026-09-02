@@ -1,0 +1,10 @@
+{
+  "name": "Update Revised Forecast",
+  "script_type": "API",
+  "api_method": "updateRevisedForecast",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": "Upande Agriculture",
+  "disabled": 0,
+  "script": "projection_name = frappe.form_dict.get(\"projection_name\")\nweeks = frappe.form_dict.get(\"weeks\")\n\nif not projection_name or not weeks:\n    frappe.throw(\"Missing required fields: projection_name, weeks\")\n\nif isinstance(weeks, str):\n    weeks = frappe.parse_json(weeks)\n\n# Revisions live on Production Forecast now; projection_name is the\n# Production Forecast docname handed out by getProductionProjection.\ndoc = frappe.get_doc(\"Production Forecast\", projection_name)\n\nweek_map = {}\nfor w in doc.weeks:\n    week_map[w.name] = w\n\nupdated = 0\nskipped = 0\nfor entry in weeks:\n    row_name = entry.get(\"name\")\n    row = week_map.get(row_name)\n    if not row:\n        skipped = skipped + 1\n        continue\n    changed = 0\n    if \"revised_forecast\" in entry:\n        row.revised_forecast_stems = frappe.utils.cint(entry.get(\"revised_forecast\"))\n        changed = 1\n    if \"custom_comment\" in entry:\n        row.note = entry.get(\"custom_comment\")\n        changed = 1\n    if changed:\n        updated = updated + 1\n\n# Works on drafts and submitted forecasts alike: the revised column and\n# note are allow_on_submit, and saving recomputes every variance.\ndoc.save(ignore_permissions=True)\nfrappe.db.commit()\n\nmsg = str(updated) + \" week(s) updated successfully\"\nif skipped:\n    msg = msg + \" (\" + str(skipped) + \" outside the forecast window were skipped)\"\nfrappe.response[\"message\"] = {\"status\": \"success\", \"updated\": updated, \"message\": msg}\n"
+}

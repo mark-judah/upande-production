@@ -1,0 +1,10 @@
+{
+  "name": "ProductionUpdatePlanTask",
+  "script_type": "API",
+  "api_method": "productionUpdatePlanTask",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": null,
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nplan = (data.get('plan') or '').strip()\ntask = (data.get('task') or '').strip()\nstatus = (data.get('status') or '').strip()\ncompletion_note = (data.get('completion_note') or '').strip()\n\nif not plan:\n    frappe.response['data'] = {'error': 'plan is required.'}\nelif not task:\n    frappe.response['data'] = {'error': 'task is required.'}\nelif status not in ['Open', 'In Progress', 'Done', 'Skipped']:\n    frappe.response['data'] = {'error': 'status must be one of Open, In Progress, Done, Skipped.'}\nelse:\n    try:\n        doc = frappe.get_doc('Production Plan Form', plan)\n        row = None\n        for t in (doc.tasks or []):\n            if t.name == task:\n                row = t\n        if not row:\n            frappe.response['data'] = {'error': 'Task ' + task + ' not found on ' + plan + '.'}\n        else:\n            row.status = status\n            now = frappe.utils.now()\n            if status == 'In Progress' and not row.started_at:\n                row.started_at = now\n            if status in ['Done', 'Skipped']:\n                row.completed_at = now\n            if status == 'Open':\n                row.completed_at = None\n            if completion_note:\n                row.completion_note = completion_note\n            doc.save(ignore_permissions=True)\n            frappe.db.commit()\n            frappe.response['data'] = {\n                'status': 'success',\n                'name': plan,\n                'task': task,\n                'message': (row.task_name or 'Task') + ' marked ' + status + '.',\n            }\n    except Exception as e:\n        frappe.db.rollback()\n        frappe.log_error('productionUpdatePlanTask error: ' + str(e))\n        frappe.response['data'] = {'error': str(e)}\n"
+}

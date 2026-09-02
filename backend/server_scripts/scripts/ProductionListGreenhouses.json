@@ -1,0 +1,10 @@
+{
+  "name": "ProductionListGreenhouses",
+  "script_type": "API",
+  "api_method": "productionListGreenhouses",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": null,
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nsearch = (data.get(\"search\") or \"\").strip()\nfarm = (data.get(\"farm\") or \"\").strip()\nlimit = int(data.get(\"limit\") or 300)\nif limit > 1000: limit = 1000\n\ntry:\n    filters = {\"disabled\": 0, \"is_group\": 0, \"name\": [\"like\", \"%GH%\"]}\n    if search:\n        filters[\"name\"] = [\"like\", \"%\" + search + \"%\"]\n    if farm:\n        filters[\"custom_farm\"] = farm\n\n    rows = frappe.get_all(\n        \"Warehouse\",\n        filters=filters,\n        fields=[\"name\", \"warehouse_name\", \"custom_farm\"],\n        order_by=\"name asc\",\n        limit=limit,\n    )\n\n    out = []\n    for r in rows:\n        out.append({\n            \"name\": r.get(\"name\") or \"\",\n            \"label\": r.get(\"warehouse_name\") or r.get(\"name\") or \"\",\n            \"farm\": r.get(\"custom_farm\") or \"\",\n        })\n\n    frappe.response[\"data\"] = {\"count\": len(out), \"greenhouses\": out}\nexcept Exception as e:\n    frappe.log_error(\"productionListGreenhouses error: \" + str(e))\n    frappe.response[\"data\"] = {\"error\": str(e)}\n"
+}

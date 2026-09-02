@@ -35,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Greenhouse Specs', icon: 'home-outline', route: '/greenhouse-specs' },
   { label: 'Trials', icon: 'flask-outline', route: '/trials' },
   { label: 'Forecasting', icon: 'trending-up-outline', route: '/forecasting' },
+  { label: 'Planning', icon: 'calendar-outline', route: '/planning' },
   { label: 'Field Rejects', icon: 'warning-outline', route: '/field-rejects' },
   { label: 'Reports', icon: 'bar-chart-outline', route: '/reports' },
 ];

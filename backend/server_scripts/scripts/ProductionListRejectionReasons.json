@@ -1,0 +1,10 @@
+{
+  "name": "ProductionListRejectionReasons",
+  "script_type": "API",
+  "api_method": "productionListRejectionReasons",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": null,
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nlimit = int(data.get(\"limit\") or 100)\nif limit > 500: limit = 500\n\ntry:\n    rows = frappe.get_all(\n        \"Field Rejection Reason\",\n        fields=[\"name\"],\n        order_by=\"name asc\",\n        limit=limit,\n    )\n    reasons = []\n    for r in rows:\n        nm = r.get(\"name\") or \"\"\n        reasons.append({\"name\": nm, \"label\": nm})\n    frappe.response[\"data\"] = {\"count\": len(reasons), \"reasons\": reasons}\nexcept Exception as e:\n    frappe.log_error(\"productionListRejectionReasons error: \" + str(e))\n    frappe.response[\"data\"] = {\"error\": str(e)}\n"
+}

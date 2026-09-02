@@ -1,0 +1,10 @@
+{
+  "script_type": "API",
+  "api_method": "productionListGrowerCandidates",
+  "doctype_event": null,
+  "reference_doctype": null,
+  "module": "Agriculture",
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nsearch = (data.get('search') or '').strip()\nlimit = int(data.get('limit') or 50)\nif limit > 200:\n    limit = 200\ntry:\n    filters = {'status': 'Active', 'designation': 'Grower'}\n    if search:\n        filters['employee_name'] = ['like', '%' + search + '%']\n    rows = frappe.get_all('Employee', filters=filters, fields=['name', 'employee_name'], order_by='employee_name asc', limit=limit)\n    out = []\n    for r in rows:\n        out.append({'employee': r.get('name') or '', 'employee_name': r.get('employee_name') or r.get('name') or ''})\n    frappe.response['data'] = {'count': len(out), 'candidates': out}\nexcept Exception as e:\n    frappe.log_error('productionListGrowerCandidates error: ' + str(e))\n    frappe.response['data'] = {'error': str(e)}",
+  "name": "productionListGrowerCandidates"
+}

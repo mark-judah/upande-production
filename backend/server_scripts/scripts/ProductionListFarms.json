@@ -1,0 +1,10 @@
+{
+  "name": "ProductionListFarms",
+  "script_type": "API",
+  "api_method": "productionListFarms",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": null,
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nsearch = (data.get(\"search\") or \"\").strip()\nlimit = int(data.get(\"limit\") or 100)\nif limit > 500: limit = 500\n\ntry:\n    filters = {}\n    if search:\n        filters[\"name\"] = [\"like\", \"%\" + search + \"%\"]\n    rows = frappe.get_all(\n        \"Farm\",\n        filters=filters,\n        fields=[\"name\"],\n        order_by=\"name asc\",\n        limit=limit,\n    )\n    farms = []\n    for r in rows:\n        nm = r.get(\"name\") or \"\"\n        farms.append({\"name\": nm, \"label\": nm})\n    frappe.response[\"data\"] = {\"count\": len(farms), \"farms\": farms}\nexcept Exception as e:\n    frappe.log_error(\"productionListFarms error: \" + str(e))\n    frappe.response[\"data\"] = {\"error\": str(e)}\n"
+}

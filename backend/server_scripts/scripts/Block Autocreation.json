@@ -1,0 +1,10 @@
+{
+  "script_type": "DocType Event",
+  "api_method": null,
+  "doctype_event": "After Save",
+  "reference_doctype": "Crop Cycle",
+  "module": "Agriculture",
+  "disabled": 1,
+  "script": "created = []\nupdated = []\nfor row in (doc.block_numbers or []):\n    pps = doc.plants_per_sqm or 0\n    area = row.block_area or 0\n    pc = int(round(area * pps))\n    pdate = row.planting_date or doc.planting_date\n    exists = frappe.db.exists({'doctype': 'Block', 'greenhouse': doc.greenhouse, 'block': row.block_no})\n    if exists:\n        b = frappe.get_doc('Block', {'greenhouse': doc.greenhouse, 'block': row.block_no})\n        b.farm = doc.farm\n        b.variety = row.variety_grown\n        b.block_length = row.block_length\n        b.block_width = row.block_width\n        b.block_area = area\n        b.total_variety_area = doc.total_beds_area\n        b.plant_count = pc\n        b.planting_date = pdate\n        b.save(ignore_permissions=True)\n        updated.append(str(row.block_no))\n    else:\n        b = frappe.get_doc({'doctype': 'Block', 'greenhouse': doc.greenhouse, 'block': row.block_no, 'farm': doc.farm, 'variety': row.variety_grown, 'block_length': row.block_length, 'block_width': row.block_width, 'block_area': area, 'total_variety_area': doc.total_beds_area, 'plant_count': pc, 'planting_date': pdate})\n        b.insert(ignore_permissions=True)\n        created.append(str(row.block_no))\nif created or updated:\n    frappe.msgprint('Blocks created: ' + str(len(created)) + ', updated: ' + str(len(updated)), indicator='green')",
+  "name": "Block Autocreation"
+}

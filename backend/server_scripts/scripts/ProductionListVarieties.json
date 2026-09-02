@@ -1,0 +1,10 @@
+{
+  "name": "ProductionListVarieties",
+  "script_type": "API",
+  "api_method": "productionListVarieties",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": null,
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nsearch = (data.get(\"search\") or \"\").strip()\nlimit = int(data.get(\"limit\") or 200)\nif limit > 500: limit = 500\n\ntry:\n    # Varieties are Items in the \"Roses\" / variety item-group. We can't know\n    # the exact group on every instance, so filter by item_group containing\n    # \"Variet\" or \"Rose\", then fall back to a search-only result.\n    filters = {\"disabled\": 0}\n    if search:\n        # SQL LIKE search on item_name\n        filters[\"item_name\"] = [\"like\", \"%\" + search + \"%\"]\n\n    rows = frappe.get_all(\n        \"Item\",\n        filters=filters,\n        fields=[\"name\", \"item_name\", \"item_group\"],\n        order_by=\"item_name asc\",\n        limit=limit * 4,\n    )\n\n    out = []\n    for r in rows:\n        grp = (r.get(\"item_group\") or \"\").lower()\n        # Heuristic: keep Items whose group looks variety/rose-related.\n        if \"variet\" in grp or \"rose\" in grp or grp == \"\":\n            out.append({\n                \"name\": r.get(\"name\") or \"\",\n                \"label\": r.get(\"item_name\") or r.get(\"name\") or \"\",\n                \"item_group\": r.get(\"item_group\") or \"\",\n            })\n        if len(out) >= limit:\n            break\n\n    frappe.response[\"data\"] = {\"count\": len(out), \"varieties\": out}\nexcept Exception as e:\n    frappe.log_error(\"productionListVarieties error: \" + str(e))\n    frappe.response[\"data\"] = {\"error\": str(e)}\n"
+}

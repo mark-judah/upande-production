@@ -21,6 +21,7 @@ const FEATURES: FeatureItem[] = [
   { key: 'greenhouse-ops',   route: '/greenhouse-ops',   label: 'Greenhouse Ops',     icon: 'shield-checkmark-outline', hint: 'Scouting, integrity inspection' },
   { key: 'trials',           route: '/trials',           label: 'Trials',             icon: 'flask-outline',         hint: 'Scouting, harvest, vase life' },
   { key: 'forecasting',      route: '/forecasting',      label: 'Forecasting',        icon: 'trending-up-outline',   hint: 'Production projection vs actual' },
+  { key: 'planning',         route: '/planning',         label: 'Planning',           icon: 'calendar-outline',      hint: 'Weekly greenhouse plans & tasks' },
   { key: 'field-rejects',    route: '/field-rejects',    label: 'Field Rejects',      icon: 'warning-outline',       hint: 'Quality control on the field' },
   { key: 'greenhouse-specs', route: '/greenhouse-specs', label: 'Greenhouse Specs',   icon: 'home-outline',          hint: 'Bed, bay, variety lookup' },
   { key: 'reports',          route: '/reports',          label: 'Reports',            icon: 'bar-chart-outline',     hint: 'Production harvest breakdown' },

@@ -5,10 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Card, Alert } from '@/src/components/Card';
 import { Dropdown } from '@/src/components/Dropdown';
+import { Segmented } from '@/src/components/Segmented';
 import { Spinner } from '@/src/components/Spinner';
 import { DateSelector } from '@/src/components/DateSelector';
 import { useToast } from '@/src/components/Toast';
-import { colors, fontFamily, fontSize, spacing } from '@/src/theme';
+import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useReportsStore } from '@/src/stores/reportsStore';
 import { cropCycleApi, type PickerOption } from '@/src/services/crop-cycle';
 
@@ -26,6 +27,7 @@ export default function ProductionReportScreen() {
 
   const [farms, setFarms] = useState<PickerOption[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<'harvested' | 'received'>('harvested');
 
   useEffect(() => {
     cropCycleApi.listFarms().then(setFarms).catch(() => {});
@@ -46,7 +48,9 @@ export default function ProductionReportScreen() {
     });
 
   const fmt = (n: number) => n.toLocaleString();
-  const isEmpty = !loading && report != null && report.farms.length === 0;
+  const activeFarms = report ? (mode === 'harvested' ? report.farms : report.receivedFarms) : [];
+  const activeTotal = report ? (mode === 'harvested' ? report.totalStems : report.receivedTotalStems) : 0;
+  const isEmpty = !loading && report != null && activeFarms.length === 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -70,49 +74,67 @@ export default function ProductionReportScreen() {
           />
         </Card>
 
+        <Segmented
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'harvested', label: 'Harvested' },
+            { value: 'received', label: 'Received' },
+          ]}
+        />
+
         {loading ? (
-          <Card><Spinner label="Loading harvest…" /></Card>
+          <Card><Spinner label="Loading…" /></Card>
         ) : isEmpty ? (
-          <Card><Alert tone="info">No harvest recorded for this date.</Alert></Card>
+          <Card>
+            <Alert tone="info">
+              No {mode === 'harvested' ? 'harvest' : 'receiving'} recorded for this date.
+            </Alert>
+          </Card>
         ) : report ? (
           <Card>
-            {report.farms.map((f) => {
-              const fKey = `farm:${f.farm}`;
+            {activeFarms.map((f, fi) => {
+              const fKey = `${mode}/farm:${f.farm}`;
               const fOpen = !collapsed.has(fKey);
               return (
-                <View key={fKey}>
+                <View key={fKey} style={fi > 0 ? { marginTop: spacing.lg } : undefined}>
                   <Pressable style={s.farmRow} onPress={() => toggle(fKey)}>
                     <Ionicons name={fOpen ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.text} />
                     <Text style={s.farmName}>{f.farm}</Text>
                     <Text style={s.farmStems}>{fmt(f.stems)} stems</Text>
                   </Pressable>
-                  {fOpen &&
-                    f.varieties.map((v) => {
-                      const vKey = `${fKey}/var:${v.variety}`;
-                      const vOpen = !collapsed.has(vKey);
-                      return (
-                        <View key={vKey}>
-                          <Pressable style={s.varRow} onPress={() => toggle(vKey)}>
-                            <Ionicons name={vOpen ? 'chevron-down' : 'chevron-forward'} size={14} color={colors.textSecondary} />
-                            <Text style={s.varName}>{v.variety}</Text>
-                            <Text style={s.varStems}>{fmt(v.stems)}</Text>
-                          </Pressable>
-                          {vOpen &&
-                            v.stemLengths.map((sl) => (
-                              <View key={`${vKey}/sl:${sl.stemLength}`} style={s.slRow}>
-                                <Text style={s.slName}>{sl.stemLength}</Text>
-                                <Text style={s.slStems}>{fmt(sl.stems)}</Text>
-                              </View>
-                            ))}
+
+                  {fOpen && (
+                    <View style={s.table}>
+                      <View style={[s.tr, s.thead]}>
+                        <Text style={[s.th, s.colVariety]}>Variety</Text>
+                        <Text style={[s.th, s.colLength]}>Length</Text>
+                        <Text style={[s.th, s.colStems, s.right]}>Stems</Text>
+                      </View>
+                      {f.varieties.map((v) => (
+                        <View key={`${fKey}/var:${v.variety}`}>
+                          <View style={[s.tr, s.varHead]}>
+                            <Text style={[s.tdVariety, s.colVariety]}>{v.variety}</Text>
+                            <Text style={[s.td, s.colLength]} />
+                            <Text style={[s.tdVariety, s.colStems, s.right]}>{fmt(v.stems)}</Text>
+                          </View>
+                          {v.stemLengths.map((sl) => (
+                            <View key={`${fKey}/var:${v.variety}/sl:${sl.stemLength}`} style={s.tr}>
+                              <Text style={[s.td, s.colVariety]} />
+                              <Text style={[s.td, s.colLength]}>{sl.stemLength}</Text>
+                              <Text style={[s.td, s.colStems, s.right]}>{fmt(sl.stems)}</Text>
+                            </View>
+                          ))}
                         </View>
-                      );
-                    })}
+                      ))}
+                    </View>
+                  )}
                 </View>
               );
             })}
             <View style={s.totalRow}>
-              <Text style={s.totalLabel}>Total</Text>
-              <Text style={s.totalStems}>{fmt(report.totalStems)} stems</Text>
+              <Text style={s.totalLabel}>{mode === 'harvested' ? 'Total harvested' : 'Total received'}</Text>
+              <Text style={s.totalStems}>{fmt(activeTotal)} stems</Text>
             </View>
           </Card>
         ) : null}
@@ -126,15 +148,36 @@ const s = StyleSheet.create({
   headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontFamily: fontFamily.semiBold, fontSize: fontSize.lg, color: colors.text },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
-  farmRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
+  farmRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
   farmName: { flex: 1, fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
   farmStems: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
-  varRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs, paddingLeft: spacing.lg },
-  varName: { flex: 1, fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textSecondary },
-  varStems: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textSecondary },
-  slRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2, paddingLeft: spacing.xxl },
-  slName: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
-  slStems: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
+
+  // Table
+  table: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    marginTop: spacing.xs,
+  },
+  tr: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  thead: { backgroundColor: colors.surfaceAlt, borderTopWidth: 0 },
+  th: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.textMuted },
+  varHead: { backgroundColor: colors.surfaceAlt },
+  td: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary },
+  tdVariety: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
+  colVariety: { flex: 1.4 },
+  colLength: { flex: 1 },
+  colStems: { width: 72 },
+  right: { textAlign: 'right' },
+
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 2, borderTopColor: colors.border },
   totalLabel: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
   totalStems: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.primary },

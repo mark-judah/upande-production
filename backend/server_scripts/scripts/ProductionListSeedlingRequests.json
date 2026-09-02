@@ -1,0 +1,10 @@
+{
+  "name": "ProductionListSeedlingRequests",
+  "script_type": "API",
+  "api_method": "productionListSeedlingRequests",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": null,
+  "disabled": 0,
+  "script": "data = frappe.request.get_json() or {}\nstatus = (data.get(\"status\") or \"\").strip()\nlimit = int(data.get(\"limit\") or 100)\nif limit > 500: limit = 500\n\ntry:\n    filters = {}\n    if status:\n        filters[\"status\"] = status\n\n    rows = frappe.get_all(\n        \"Seedling Request\",\n        filters=filters,\n        fields=[\"name\", \"status\", \"request_date\", \"required_by_date\",\n                \"priority\", \"farm\", \"target_farm_block\",\n                \"total_qty_requested\", \"total_qty_dispatched\",\n                \"fulfilment_percentage\", \"days_to_fulfil\", \"reason\",\n                \"requested_by\"],\n        order_by=\"creation desc\",\n        limit=limit,\n    )\n\n    requests = []\n    for r in rows:\n        requests.append({\n            \"name\": r.get(\"name\") or \"\",\n            \"status\": r.get(\"status\") or \"\",\n            \"request_date\": str(r.get(\"request_date\") or \"\"),\n            \"required_by_date\": str(r.get(\"required_by_date\") or \"\"),\n            \"priority\": r.get(\"priority\") or \"\",\n            \"farm\": r.get(\"farm\") or \"\",\n            \"target_farm_block\": r.get(\"target_farm_block\") or \"\",\n            \"total_qty_requested\": int(r.get(\"total_qty_requested\") or 0),\n            \"total_qty_dispatched\": int(r.get(\"total_qty_dispatched\") or 0),\n            \"fulfilment_percentage\": float(r.get(\"fulfilment_percentage\") or 0),\n            \"days_to_fulfil\": int(r.get(\"days_to_fulfil\") or 0),\n            \"reason\": r.get(\"reason\") or \"\",\n            \"requested_by\": r.get(\"requested_by\") or \"\",\n        })\n\n    frappe.response[\"data\"] = {\"count\": len(requests), \"requests\": requests}\nexcept Exception as e:\n    frappe.log_error(\"productionListSeedlingRequests error: \" + str(e))\n    frappe.response[\"data\"] = {\"error\": str(e)}\n"
+}

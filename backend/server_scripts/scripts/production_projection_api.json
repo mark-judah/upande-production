@@ -1,0 +1,10 @@
+{
+  "name": "production_projection_api",
+  "script_type": "API",
+  "api_method": "production_projection_api",
+  "doctype_event": "Before Insert",
+  "reference_doctype": null,
+  "module": "Agriculture",
+  "disabled": 1,
+  "script": "# Method: Feed Projection Week child table from Query Report\ndef feed_projection(parent_name, filters=None):\n    \"\"\"\n    Populate Projection Week child table from yearly totals,\n    distributing evenly across 52 weeks.\n    \"\"\"\n    filters = filters or {}\n    year = filters.get(\"year\") or \"%\"\n    farm = filters.get(\"farm\") or \"%\"\n    greenhouse_filter = filters.get(\"greenhouse\") or \"%\"\n    variety = filters.get(\"variety\") or \"%\"\n\n    # Fetch yearly totals from Crop Cycle\n    rows = frappe.db.sql(\"\"\"\n        SELECT\n            cc.greenhouse AS greenhouse,\n            cc.variety AS item_code,\n            IFNULL(it.item_group, 'No Group') AS item_group,\n            ROUND(cc.area * cc.variety_yield) AS yearly_total\n        FROM `tabCrop Cycle` cc\n        LEFT JOIN `tabItem` it ON it.item_code = cc.variety\n        WHERE cc.area > 0\n          AND cc.variety_yield > 0\n          AND (%(greenhouse)s='%' OR cc.greenhouse=%(greenhouse)s)\n          AND (%(variety)s='%' OR cc.variety=%(variety)s)\n        GROUP BY cc.greenhouse, cc.variety, it.item_group\n        ORDER BY cc.greenhouse, cc.variety\n    \"\"\", values={\"greenhouse\": greenhouse_filter, \"variety\": variety}, as_dict=True)\n\n    # Load parent doc\n    doc = frappe.get_doc(\"Production Projection\", parent_name)\n    \n    # Clear existing child table\n    doc.set(\"projection_week\", [])\n\n    # Populate Projection Week\n    for r in rows:\n        weekly_qty = round(r.yearly_total / 52, 2)\n        for week_no in range(1, 53):\n            doc.append(\"projection_week\", {\n                \"week_no\": week_no,\n                \"projected_qty\": weekly_qty\n            })\n\n    doc.save(ignore_permissions=True)\n    frappe.db.commit()\n    \n    return f\"Inserted/updated {len(rows) * 52} rows in {parent_name}\"\n"
+}
