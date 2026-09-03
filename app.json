@@ -3,6 +3,7 @@
     "name": "Upande Production",
     "slug": "upande-production",
     "version": "1.0.0",
+    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "icon": "./assets/images/upande_logo.png",
     "scheme": "upandeproduction",
@@ -26,17 +27,8 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.CAMERA",
-        "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT",
-        "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/upande_logo.png"
     },
     "plugins": [
       "expo-router",
