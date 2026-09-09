@@ -175,9 +175,15 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
   const [quantity, setQuantity] = useState('');
 
   // Spray roses are harvested via the grading flow (Sprays tab), not the
-  // standard harvest form — keep them out of the variety picker here.
+  // standard harvest form — keep them out of the variety picker here. Must
+  // filter on isSprayRose (a real ancestor-chain check done server-side),
+  // not itemGroup directly: real items always sit in a LEAF group like
+  // "Spray Roses - Bombastics", never the bare "Spray Roses" parent, so
+  // `v.itemGroup !== 'Spray Roses'` was always true and never filtered
+  // anything out — confirmed live: 295 real Spray Roses harvests went
+  // through this exact form on 2026-09-09 alone.
   const standardVarieties = useMemo(
-    () => varieties.filter((v) => v.itemGroup !== 'Spray Roses'),
+    () => varieties.filter((v) => !v.isSprayRose),
     [varieties],
   );
 
@@ -189,17 +195,12 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
     if (greenhouse) loadGreenhouseData(greenhouse);
     setVariety('');
     setHarvester('');
+    setCutStage('');
   }, [greenhouse, loadGreenhouseData]);
 
   useEffect(() => {
     if (standardVarieties.length === 1 && !variety) setVariety(standardVarieties[0].name);
   }, [standardVarieties, variety]);
-
-  // Cut stages come from the Cut Stage master (fetched with greenhouse data);
-  // select the first once loaded if nothing valid is chosen yet.
-  useEffect(() => {
-    if (cutStages.length && !cutStages.includes(cutStage)) setCutStage(cutStages[0]);
-  }, [cutStages, cutStage]);
 
   const submit = async () => {
     if (!farm || !greenhouse || !variety || !harvester || !stemLength || !bucketId || !quantity || !cutStage) {
@@ -227,7 +228,9 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
       setBucketId('');
       setStemLength('');
       setQuantity('');
-      setCutStage(cutStages[0] ?? '');
+      // Force a deliberate re-pick every submit — don't silently carry over
+      // (or auto-select) a cut stage for the next scan.
+      setCutStage('');
     } else {
       showError(outcome.error);
     }

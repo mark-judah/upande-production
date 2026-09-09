@@ -36,8 +36,11 @@ export default function BucketStatusScreen() {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editVariety, setEditVariety] = useState('');
   const [editStemLength, setEditStemLength] = useState('');
+  const [editCutStage, setEditCutStage] = useState('');
+  const [editQty, setEditQty] = useState('');
   const [editVarietyOptions, setEditVarietyOptions] = useState<DropdownOption[]>([]);
   const [editStemLengthOptions, setEditStemLengthOptions] = useState<DropdownOption[]>([]);
+  const [editCutStageOptions, setEditCutStageOptions] = useState<DropdownOption[]>([]);
   const [editOptionsLoading, setEditOptionsLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
 
@@ -75,13 +78,17 @@ export default function BucketStatusScreen() {
     setEditingIndex(index);
     setEditVariety(entry.variety);
     setEditStemLength(entry.stemLength);
+    setEditCutStage(entry.cutStage);
+    setEditQty(String(entry.qty));
     setEditVarietyOptions([]);
     setEditStemLengthOptions([]);
+    setEditCutStageOptions([]);
     setEditOptionsLoading(true);
     Promise.all([harvestingApi.getGreenhouseData(entry.greenhouse), harvestingApi.listStemLengths()])
       .then(([ghData, stemLengths]) => {
         setEditVarietyOptions(toOptions(ghData.varieties));
         setEditStemLengthOptions(toOptions(stemLengths));
+        setEditCutStageOptions(ghData.cutStages.map((c) => ({ value: c, label: c })));
       })
       .catch((err) => showError(err?.message || 'Could not load variety/length options.'))
       .finally(() => setEditOptionsLoading(false));
@@ -94,9 +101,20 @@ export default function BucketStatusScreen() {
       showError('This entry is missing its reference — pull to refresh and try again.');
       return;
     }
+    const qty = Number(editQty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      showError('Quantity must be a positive number.');
+      return;
+    }
     setEditSaving(true);
     bucketStatusApi
-      .editEntry({ stockEntryName: entry.name, variety: editVariety, stemLength: editStemLength })
+      .editEntry({
+        stockEntryName: entry.name,
+        variety: editVariety,
+        stemLength: editStemLength,
+        cutStage: editCutStage,
+        qty,
+      })
       .then(() => {
         showSuccess('Entry updated.');
         setEditingIndex(null);
@@ -176,6 +194,21 @@ export default function BucketStatusScreen() {
                             onChange={setEditStemLength}
                             options={editStemLengthOptions}
                           />
+                          <View style={{ height: spacing.sm }} />
+                          <Dropdown
+                            label="Cut stage"
+                            value={editCutStage}
+                            onChange={setEditCutStage}
+                            options={editCutStageOptions}
+                            searchable={false}
+                          />
+                          <View style={{ height: spacing.sm }} />
+                          <LabeledInput
+                            label="Number of stems"
+                            value={editQty}
+                            onChangeText={setEditQty}
+                            keyboardType="number-pad"
+                          />
                         </>
                       )}
                       <View style={s.editActions}>
@@ -187,7 +220,10 @@ export default function BucketStatusScreen() {
                             label="Save"
                             onPress={() => saveEdit(e)}
                             loading={editSaving}
-                            disabled={editOptionsLoading || (!editVariety && !editStemLength)}
+                            disabled={
+                              editOptionsLoading ||
+                              (!editVariety && !editStemLength && !editCutStage && !editQty)
+                            }
                           />
                         </View>
                       </View>
@@ -199,6 +235,9 @@ export default function BucketStatusScreen() {
                       <Text style={s.variety}>{e.variety}</Text>
                       <Text style={s.meta}>
                         {e.greenhouse} · {e.stemLength}
+                      </Text>
+                      <Text style={s.meta}>
+                        {e.cutStage} · {e.harvester}
                       </Text>
                       <Text style={s.time}>{formatExactTime(e.time)}</Text>
                     </View>
