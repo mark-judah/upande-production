@@ -359,16 +359,28 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
   const graderRef = useRef<TextInput>(null);
   const bunchRef = useRef<TextInput>(null);
 
+  // Guards against out-of-order responses: loadContents() is fired-and-
+  // forgotten (not awaited) after every grade so scanning the next bunch
+  // isn't blocked on it. Back-to-back scans over a slow/spotty greenhouse
+  // connection can have an EARLIER call's response land AFTER a later one's
+  // -- without this guard the stale (lower) tally silently overwrites the
+  // fresh one, which is exactly "I scanned another bunch but the counter
+  // didn't update" (it updated, then got rolled back a moment later).
+  const contentsRequestId = useRef(0);
+
   // Fetch what's in the bucket (variety → stems). Called when a bucket is
   // scanned and again after every successful grade so the tally auto-updates.
   const loadContents = useCallback(async () => {
     if (!bucketId) {
+      contentsRequestId.current += 1;
       setContents([]);
       setContentsTotal(0);
       return;
     }
+    const requestId = ++contentsRequestId.current;
     try {
       const bc = await gradingApi.bucketContents(bucketId);
+      if (requestId !== contentsRequestId.current) return; // superseded by a newer call
       setContents(bc.contents);
       setContentsTotal(bc.totalStems);
     } catch {

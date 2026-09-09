@@ -83,6 +83,7 @@ export default function TabLayout() {
       <Tabs.Screen name="planning" options={{ title: 'Planning', href: null }} />
       <Tabs.Screen name="field-rejects" options={{ title: 'Field Rejects', href: null }} />
       <Tabs.Screen name="greenhouse-specs" options={{ title: 'Greenhouse Specs', href: null }} />
+      <Tabs.Screen name="bucket-status" options={{ title: 'Bucket Status', href: null }} />
     </Tabs>
   );
 }

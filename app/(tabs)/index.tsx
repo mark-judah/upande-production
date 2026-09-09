@@ -25,6 +25,7 @@ const FEATURES: FeatureItem[] = [
   { key: 'field-rejects',    route: '/field-rejects',    label: 'Field Rejects',      icon: 'warning-outline',       hint: 'Quality control on the field' },
   { key: 'greenhouse-specs', route: '/greenhouse-specs', label: 'Greenhouse Specs',   icon: 'home-outline',          hint: 'Bed, bay, variety lookup' },
   { key: 'reports',          route: '/reports',          label: 'Reports',            icon: 'bar-chart-outline',     hint: 'Production harvest breakdown' },
+  { key: 'bucket-status',    route: '/bucket-status',    label: 'Bucket Status',      icon: 'cube-outline',          hint: "What's currently in a bucket" },
 ];
 
 export default function HomeScreen() {
