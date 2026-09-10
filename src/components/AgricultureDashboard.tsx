@@ -1,34 +1,40 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useDashboardStore } from '@/src/stores/dashboardStore';
 import { useNetworkStore } from '@/src/stores/networkStore';
+import { AgricultureDashboardSkeleton } from '@/src/components/Skeleton';
 import type { DashboardGreenhouse } from '@/src/services/dashboard';
 
 /**
- * Home-tab dashboard — today's harvested-vs-received picture, the numbers a
- * supervisor actually checks first. Backed by the live `get_production_
- * dashboard_data` Server Script on Kaitet (src/services/dashboard.ts).
+ * Home-tab dashboard — today's harvested-vs-received picture, styled to the
+ * same bar as mona-shelve's DashboardScreen: a dark hero, dark saturated
+ * bento tiles for the volume metrics, an amber reconciliation card for the
+ * headline variance, and compact greenhouse rows with an arrow-pair
+ * (harvested → received) and a proportion bar.
  *
- * Deliberately NOT a crop-cycle summary — planting/bed data has its own home
- * on the Crop Cycle tab. This screen is what was picked, what made it to the
- * cold store, and what's still out in the greenhouse.
+ * The two dark bento tiles and the reject tile's "active" tone are literal
+ * dark shades, not new per-feature accent colours — Received/Good Stems use
+ * the app's own near-black neutral (colors.primary's family) at two depths,
+ * and the reject tile only ever darkens the shared `error` status hue. The
+ * amber variance card, quarantine banner, and greenhouse bar all use the
+ * shared success/warning/error tokens from theme.ts, same as elsewhere in
+ * the app — nothing here introduces a new hue.
  */
+
+const HERO_BG = '#052E16';
+const HERO_ACCENT = '#0A4A22';
+const DARK_RECEIVED = '#171717';
+const DARK_GOOD = '#1C1917';
+const DARK_REJECT_ACTIVE = '#3B0A0A';
 
 function formatToday(): string {
   const d = new Date();
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
-}
-
-function formatAging(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 interface FarmGroup {
@@ -65,36 +71,37 @@ export function AgricultureDashboard() {
   const error = useDashboardStore((s) => s.error);
   const online = useNetworkStore((s) => s.online);
 
-  const farmGroups = useMemo(() => groupByFarm(data?.greenhouseData ?? []), [data]);
+  const fade = useRef(new Animated.Value(0)).current;
+  const showSkeleton = loading && !data;
 
-  const agingByGreenhouse = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const f of data?.unreceived.tree ?? []) {
-      for (const g of f.greenhouses) map.set(g.greenhouse, g.agingMinutes);
+  useEffect(() => {
+    if (showSkeleton) {
+      fade.setValue(0);
+    } else {
+      Animated.timing(fade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     }
-    return map;
-  }, [data]);
+  }, [showSkeleton, fade]);
 
+  const farmGroups = useMemo(() => groupByFarm(data?.greenhouseData ?? []), [data]);
   const topVarieties = useMemo(
     () => (data?.topVarieties ?? []).filter((v) => v.harvested > 0).slice(0, 8),
     [data],
   );
 
-  if (loading && !data) {
-    return (
-      <View style={s.hero}>
-        <Text style={s.heroChip}>HARVESTED TODAY</Text>
-        <View style={s.heroSkeletonNum} />
-      </View>
-    );
+  if (showSkeleton) {
+    return <AgricultureDashboardSkeleton />;
   }
 
   const kpi = data?.kpi;
   const rejects = (kpi?.quarantineRejects ?? 0) + (kpi?.packhouseRejects ?? 0);
+  const hasRejects = rejects > 0;
+  const difference = (kpi?.received ?? 0) - (kpi?.harvested ?? 0);
+  const differencePct = kpi?.harvested ? Math.round((difference / kpi.harvested) * 100) : 0;
   const isEmpty = !loading && data && kpi?.harvested === 0 && farmGroups.length === 0;
+  const greenhouseCount = farmGroups.reduce((n, f) => n + f.greenhouses.length, 0);
 
   return (
-    <View>
+    <Animated.View style={{ opacity: fade }}>
       <View style={s.topRow}>
         <Text style={s.dateText}>{formatToday()}</Text>
         <View style={[s.statusPill, online ? s.pillLive : s.pillOffline]}>
@@ -117,33 +124,82 @@ export function AgricultureDashboard() {
         <View style={s.heroBubble} />
         <Text style={s.heroChip}>HARVESTED TODAY</Text>
         <Text style={s.heroNumber}>{(kpi?.harvested ?? 0).toLocaleString()}</Text>
-        <Text style={s.heroUnit}>
-          {(kpi?.received ?? 0).toLocaleString()} received · {farmGroups.reduce((n, f) => n + f.greenhouses.length, 0)} greenhouses picked
-        </Text>
-        <Ionicons name="cut" size={64} color="rgba(255,255,255,0.07)" style={s.heroIcon} />
+        <Text style={s.heroUnit}>stems · {greenhouseCount} {greenhouseCount === 1 ? 'greenhouse' : 'greenhouses'} picked</Text>
+        <Ionicons name="leaf" size={72} color="rgba(255,255,255,0.06)" style={s.heroIcon} />
       </Pressable>
 
-      {/* Bento — received / unreceived / quarantine / rejects */}
-      <View style={s.bentoGrid}>
-        <View style={[s.bentoTile, { backgroundColor: '#DCFCE7' }]}>
-          <Text style={[s.bentoChip, { color: '#166534' }]}>RECEIVED</Text>
-          <Text style={[s.bentoNumber, { color: '#166534' }]}>{(kpi?.received ?? 0).toLocaleString()}</Text>
+      {/* Received + Good stems — dark volume tiles */}
+      <View style={s.row}>
+        <View style={[s.tile, { backgroundColor: DARK_RECEIVED }]}>
+          <Text style={s.tileChip}>RECEIVED</Text>
+          <Text style={s.tileNumber}>{(kpi?.received ?? 0).toLocaleString()}</Text>
+          <Text style={s.tileUnit}>stems</Text>
         </View>
-        <View style={[s.bentoTile, { backgroundColor: (kpi?.recvVariance ?? 0) > 0 ? '#FEF3C7' : '#DCFCE7' }]}>
-          <Text style={[s.bentoChip, { color: (kpi?.recvVariance ?? 0) > 0 ? '#92400E' : '#166534' }]}>UNRECEIVED</Text>
-          <Text style={[s.bentoNumber, { color: (kpi?.recvVariance ?? 0) > 0 ? '#92400E' : '#166534' }]}>
-            {(kpi?.recvVariance ?? 0).toLocaleString()}
+        <View style={[s.tile, { backgroundColor: DARK_GOOD }]}>
+          <Text style={s.tileChip}>GOOD STEMS</Text>
+          <Text style={s.tileNumber}>{(kpi?.goodStems ?? 0).toLocaleString()}</Text>
+          <Text style={s.tileUnit}>stems</Text>
+        </View>
+      </View>
+
+      {/* Rejects — dark, turns to a dark red only when there's something in it */}
+      <View style={[s.rejectTile, hasRejects && s.rejectTileActive]}>
+        <View style={s.rejectTileLeft}>
+          <Text style={[s.tileChip, hasRejects && { color: '#FECACA' }]}>REJECTS</Text>
+          <Text style={[s.rejectNumber, hasRejects ? { color: '#FCA5A5' } : { color: colors.textMuted }]}>
+            {rejects.toLocaleString()}
+          </Text>
+          <Text style={[s.tileUnit, hasRejects && { color: '#FCA5A5' }]}>stems today</Text>
+        </View>
+        {hasRejects ? (
+          <View style={s.rejectBreakdown}>
+            <View style={s.rejectBreakdownRow}>
+              <Text style={s.rejectBreakdownLabel}>Quarantine</Text>
+              <Text style={s.rejectBreakdownValue}>{(kpi?.quarantineRejects ?? 0).toLocaleString()}</Text>
+            </View>
+            <View style={s.rejectBreakdownRow}>
+              <Text style={s.rejectBreakdownLabel}>Packhouse</Text>
+              <Text style={s.rejectBreakdownValue}>{(kpi?.packhouseRejects ?? 0).toLocaleString()}</Text>
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Quarantine pending — slim banner, only when there's something waiting */}
+      {(kpi?.quarantinePending ?? 0) > 0 ? (
+        <View style={s.pendingBanner}>
+          <Ionicons name="time-outline" size={15} color="#92400E" />
+          <Text style={s.pendingText}>
+            <Text style={s.pendingNum}>{(kpi!.quarantinePending).toLocaleString()}</Text> stems pending quarantine review
           </Text>
         </View>
-        <View style={[s.bentoTile, { backgroundColor: (kpi?.quarantinePending ?? 0) > 0 ? '#FEF3C7' : colors.surfaceAlt }]}>
-          <Text style={[s.bentoChip, { color: (kpi?.quarantinePending ?? 0) > 0 ? '#92400E' : colors.textMuted }]}>QUARANTINE PENDING</Text>
-          <Text style={[s.bentoNumber, { color: (kpi?.quarantinePending ?? 0) > 0 ? '#92400E' : colors.text }]}>
-            {(kpi?.quarantinePending ?? 0).toLocaleString()}
-          </Text>
-        </View>
-        <View style={[s.bentoTile, { backgroundColor: rejects > 0 ? '#FEE2E2' : colors.surfaceAlt }]}>
-          <Text style={[s.bentoChip, { color: rejects > 0 ? '#991B1B' : colors.textMuted }]}>REJECTS</Text>
-          <Text style={[s.bentoNumber, { color: rejects > 0 ? '#991B1B' : colors.text }]}>{rejects.toLocaleString()}</Text>
+      ) : null}
+
+      {/* Variance card — the harvested-vs-received reconciliation */}
+      <View style={s.varianceCard}>
+        <Text style={s.varianceLabel}>HARVESTED VS RECEIVED</Text>
+        <View style={s.varianceBody}>
+          <View style={s.varianceStat}>
+            <Text style={s.varianceStatLabel}>Harvested</Text>
+            <Text style={s.varianceStatNum}>{(kpi?.harvested ?? 0).toLocaleString()}</Text>
+            <Text style={s.varianceStatUnit}>stems</Text>
+          </View>
+          <View style={s.varianceDivider} />
+          <View style={s.varianceStat}>
+            <Text style={s.varianceStatLabel}>Received</Text>
+            <Text style={s.varianceStatNum}>{(kpi?.received ?? 0).toLocaleString()}</Text>
+            <Text style={s.varianceStatUnit}>stems</Text>
+          </View>
+          <View style={s.varianceDivider} />
+          <View style={s.varianceStat}>
+            <Text style={s.varianceStatLabel}>Difference</Text>
+            <Text style={[s.varianceStatNum, difference >= 0 ? s.deltaPos : s.deltaNeg]}>
+              {difference > 0 ? '+' : ''}{difference.toLocaleString()}
+            </Text>
+            <Text style={[s.varianceStatUnit, difference >= 0 ? s.deltaPos : s.deltaNeg]}>
+              {differencePct > 0 ? '+' : ''}{differencePct}%
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -170,7 +226,12 @@ export function AgricultureDashboard() {
             <Text style={s.sectionCount}>{farmGroups.length} {farmGroups.length === 1 ? 'farm' : 'farms'}</Text>
           </View>
           {farmGroups.map((f) => (
-            <FarmCard key={f.farm} group={f} agingByGreenhouse={agingByGreenhouse} />
+            <View key={f.farm}>
+              {farmGroups.length > 1 ? <Text style={s.farmLabel}>{f.farm}</Text> : null}
+              {f.greenhouses.map((g) => (
+                <GreenhouseRow key={g.greenhouse} g={g} />
+              ))}
+            </View>
           ))}
         </View>
       ) : isEmpty ? (
@@ -188,79 +249,49 @@ export function AgricultureDashboard() {
       {/* Quick actions */}
       <View style={s.actionsWrap}>
         <Text style={s.sectionLabel}>QUICK ACTIONS</Text>
-        <View style={s.actionsRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.actionsRow}>
           <ActionChip icon="cut-outline" label="Harvesting" onPress={() => router.push('/harvesting' as any)} />
           <ActionChip icon="bar-chart-outline" label="Production report" onPress={() => router.push('/reports/production' as any)} />
           <ActionChip icon="cube-outline" label="Bucket status" onPress={() => router.push('/bucket-status' as any)} />
           <ActionChip icon="warning-outline" label="Field rejects" onPress={() => router.push('/field-rejects' as any)} />
           <ActionChip icon="leaf-outline" label="Crop cycle" onPress={() => router.push('/crop-cycle' as any)} />
-        </View>
+        </ScrollView>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
-function FarmCard({
-  group,
-  agingByGreenhouse,
-}: {
-  group: FarmGroup;
-  agingByGreenhouse: Map<string, number>;
-}) {
-  const [open, setOpen] = useState(true);
-  const hasMultipleHouses = group.greenhouses.length > 1;
+function GreenhouseRow({ g }: { g: DashboardGreenhouse }) {
+  const ratio = g.harvested > 0 ? Math.min(1, g.received / g.harvested) : 0;
+  const ratioPct = Math.round(ratio * 100);
+  const complete = g.harvested > 0 && g.received >= g.harvested;
 
   return (
-    <View style={s.farmCard}>
-      <Pressable
-        onPress={() => hasMultipleHouses && setOpen(!open)}
-        style={s.farmMain}
-        disabled={!hasMultipleHouses}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={s.farmName} numberOfLines={1}>{group.farm}</Text>
-          <Text style={s.farmMeta}>
-            {group.greenhouses.length} {group.greenhouses.length === 1 ? 'greenhouse' : 'greenhouses'} · {group.received.toLocaleString()} received
-          </Text>
+    <View style={s.ghRowCard}>
+      <View style={s.ghRowMain}>
+        <View style={s.ghRowLeft}>
+          <Text style={s.ghRowName} numberOfLines={1}>{g.greenhouseName}</Text>
+          <View style={s.ghRowMetaLine}>
+            {g.budget > 0 ? <Text style={s.ghRowMeta}>{g.budgetAchievementPct}% of budget</Text> : null}
+            {g.totalRejects > 0 ? (
+              <Text style={s.ghRowRejText}>{g.budget > 0 ? ' · ' : ''}{g.totalRejects.toLocaleString()} rej</Text>
+            ) : null}
+          </View>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={s.farmPlants}>{group.harvested.toLocaleString()}</Text>
-          <Text style={s.farmPlantsUnit}>harvested</Text>
+        <View style={s.ghRowRight}>
+          <View style={s.ghRowPair}>
+            <Text style={s.ghRowNum}>{g.harvested.toLocaleString()}</Text>
+            <Text style={s.ghRowArrow}>→</Text>
+            <Text style={[s.ghRowNum, g.received === 0 && s.ghRowNumMuted, complete && s.ghRowNumGood]}>
+              {g.received.toLocaleString()}
+            </Text>
+          </View>
+          <Text style={s.ghRowRatio}>{g.harvested > 0 ? `${ratioPct}% received` : '—'}</Text>
         </View>
-        {hasMultipleHouses ? (
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} style={{ marginLeft: spacing.sm }} />
-        ) : null}
-      </Pressable>
-      {open ? (
-        <View style={s.ghList}>
-          {group.greenhouses.map((g) => {
-            const pct = g.harvested > 0 ? Math.min(100, Math.round((g.received / g.harvested) * 100)) : 100;
-            const aging = agingByGreenhouse.get(g.greenhouse);
-            return (
-              <View key={g.greenhouse} style={s.ghRow}>
-                <View style={s.ghRowTop}>
-                  <Text style={s.ghName} numberOfLines={1}>{g.greenhouseName}</Text>
-                  <Text style={s.ghStat}>{g.harvested.toLocaleString()} harvested</Text>
-                </View>
-                <View style={s.ghBarTrack}>
-                  <View style={[s.ghBarFill, { width: `${pct}%`, backgroundColor: pct < 90 ? colors.warning : colors.success }]} />
-                </View>
-                <View style={s.ghRowBottom}>
-                  <Text style={s.ghSubStat}>{pct}% received</Text>
-                  {g.variance > 0 ? (
-                    <Text style={s.ghWarn}>
-                      {g.variance.toLocaleString()} unreceived{aging != null ? ` · ${formatAging(aging)}` : ''}
-                    </Text>
-                  ) : null}
-                  {g.budget > 0 ? (
-                    <Text style={s.ghSubStat}>{g.budgetAchievementPct}% of budget</Text>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
+      </View>
+      <View style={s.ghRowBarTrack}>
+        <View style={[s.ghRowBarFill, complete && s.ghRowBarFillFull, { width: `${ratioPct}%` }]} />
+      </View>
     </View>
   );
 }
@@ -281,9 +312,6 @@ function ActionChip({
     </Pressable>
   );
 }
-
-const HERO_BG = '#14532D';
-const HERO_ACCENT = '#166534';
 
 const s = StyleSheet.create({
   topRow: {
@@ -316,81 +344,123 @@ const s = StyleSheet.create({
 
   hero: {
     backgroundColor: HERO_BG,
-    borderRadius: borderRadius.xl,
+    borderRadius: 24,
     padding: spacing.xl,
     marginBottom: spacing.sm,
     overflow: 'hidden',
-    minHeight: 148,
+    minHeight: 160,
   },
   heroBubble: {
-    position: 'absolute', width: 180, height: 180, borderRadius: 90,
-    backgroundColor: HERO_ACCENT, bottom: -60, right: -30,
+    position: 'absolute', width: 200, height: 200, borderRadius: 100,
+    backgroundColor: HERO_ACCENT, bottom: -60, right: -40,
   },
   heroChip: {
     fontFamily: fontFamily.medium, fontSize: fontSize.xs,
     color: 'rgba(255,255,255,0.55)', letterSpacing: 1.2, marginBottom: spacing.sm,
   },
-  heroNumber: { fontFamily: fontFamily.bold, fontSize: 44, color: '#FFFFFF', lineHeight: 48 },
-  heroUnit: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  heroNumber: { fontFamily: fontFamily.bold, fontSize: 52, color: '#FFFFFF', lineHeight: 56 },
+  heroUnit: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
   heroIcon: { position: 'absolute', bottom: spacing.lg, right: spacing.xl },
-  heroSkeletonNum: { width: 140, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 4 },
 
-  bentoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  bentoTile: {
-    flexBasis: '48%',
-    flexGrow: 1,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+  row: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  tile: {
+    flex: 1, borderRadius: 20, padding: spacing.lg,
+    minHeight: 110, justifyContent: 'flex-end',
   },
-  bentoChip: {
+  tileChip: {
     fontFamily: fontFamily.medium, fontSize: 10,
-    letterSpacing: 1, marginBottom: spacing.xs,
+    color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginBottom: spacing.xs,
   },
-  bentoNumber: { fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 28 },
+  tileNumber: { fontFamily: fontFamily.bold, fontSize: 34, color: '#FFFFFF', lineHeight: 38 },
+  tileUnit: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+
+  rejectTile: {
+    backgroundColor: DARK_GOOD, borderRadius: 20, padding: spacing.lg, marginBottom: spacing.sm,
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.lg,
+  },
+  rejectTileActive: { backgroundColor: DARK_REJECT_ACTIVE },
+  rejectTileLeft: { flex: 1 },
+  rejectNumber: { fontFamily: fontFamily.bold, fontSize: 36, lineHeight: 40 },
+  rejectBreakdown: { justifyContent: 'center', gap: spacing.xs, paddingTop: 6 },
+  rejectBreakdownRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    justifyContent: 'space-between', minWidth: 110,
+  },
+  rejectBreakdownLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: 'rgba(255,255,255,0.45)' },
+  rejectBreakdownValue: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: '#FCA5A5' },
+
+  pendingBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A',
+    borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.sm,
+  },
+  pendingText: { flex: 1, fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: '#92400E' },
+  pendingNum: { fontFamily: fontFamily.bold },
+
+  varianceCard: {
+    backgroundColor: '#FFFBEB', borderRadius: 20, padding: spacing.lg,
+    marginBottom: spacing.sm, borderWidth: 1, borderColor: '#FDE68A',
+  },
+  varianceLabel: { fontFamily: fontFamily.medium, fontSize: 10, color: '#92400E', letterSpacing: 1.2 },
+  varianceBody: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: spacing.md },
+  varianceStat: { alignItems: 'center', flex: 1 },
+  varianceDivider: { width: 1, height: 40, backgroundColor: '#FDE68A' },
+  varianceStatLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: '#92400E', marginBottom: 4 },
+  varianceStatNum: { fontFamily: fontFamily.bold, fontSize: fontSize.xl, color: colors.text },
+  varianceStatUnit: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
+  deltaPos: { color: '#16A34A' },
+  deltaNeg: { color: '#DC2626' },
 
   varietySection: { marginTop: spacing.sm, marginBottom: spacing.sm },
   varietyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   varietyChip: {
     backgroundColor: colors.surface, borderRadius: borderRadius.md,
     borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    minWidth: 92,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minWidth: 92,
   },
   varietyChipStems: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
   varietyChipName: { fontFamily: fontFamily.regular, fontSize: 10, color: colors.textMuted, marginTop: 1, maxWidth: 100 },
 
-  farmSection: { marginTop: spacing.sm, marginBottom: spacing.sm },
+  farmSection: { marginTop: spacing.md, marginBottom: spacing.sm },
   sectionHeader: {
     flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
     marginBottom: spacing.sm, paddingHorizontal: 2,
   },
   sectionLabel: { fontFamily: fontFamily.semiBold, fontSize: 10, color: colors.textMuted, letterSpacing: 1.4 },
   sectionCount: { fontFamily: fontFamily.medium, fontSize: 10, color: colors.textMuted },
+  farmLabel: {
+    fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.textSecondary,
+    marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: 2,
+  },
 
-  farmCard: {
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
+  ghRowCard: {
+    backgroundColor: colors.surface, borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-    paddingHorizontal: spacing.md, paddingTop: spacing.sm + 2, paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.md, paddingTop: spacing.sm + 2, paddingBottom: 0,
     marginBottom: spacing.xs + 2, overflow: 'hidden',
   },
-  farmMain: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
-  farmName: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
-  farmMeta: { fontFamily: fontFamily.regular, fontSize: 10, color: colors.textMuted, marginTop: 1 },
-  farmPlants: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
-  farmPlantsUnit: { fontFamily: fontFamily.regular, fontSize: 10, color: colors.textMuted, marginTop: 1 },
-  ghList: { paddingTop: spacing.xs, gap: spacing.sm },
-  ghRow: { paddingVertical: spacing.xs },
-  ghRowTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  ghName: { flex: 1, fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
-  ghStat: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.text },
-  ghBarTrack: { height: 4, borderRadius: 2, backgroundColor: colors.background, overflow: 'hidden' },
-  ghBarFill: { height: '100%', borderRadius: 2 },
-  ghRowBottom: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  ghSubStat: { fontFamily: fontFamily.regular, fontSize: 10, color: colors.textMuted },
-  ghWarn: { fontFamily: fontFamily.medium, fontSize: 10, color: colors.warning },
+  ghRowMain: { flexDirection: 'row', alignItems: 'center', paddingBottom: spacing.sm },
+  ghRowLeft: { flex: 1, paddingRight: spacing.sm },
+  ghRowName: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
+  ghRowMetaLine: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  ghRowMeta: { fontFamily: fontFamily.regular, fontSize: 10, color: colors.textMuted },
+  ghRowRejText: { fontFamily: fontFamily.medium, fontSize: 10, color: '#DC2626' },
+  ghRowRight: { alignItems: 'flex-end' },
+  ghRowPair: { flexDirection: 'row', alignItems: 'baseline' },
+  ghRowNum: { fontFamily: fontFamily.bold, fontSize: 17, color: colors.text, minWidth: 36, textAlign: 'right' },
+  ghRowNumMuted: { color: colors.textMuted, fontFamily: fontFamily.regular },
+  ghRowNumGood: { color: '#15803D' },
+  ghRowArrow: { fontFamily: fontFamily.regular, fontSize: 12, color: colors.textMuted, marginHorizontal: 6 },
+  ghRowRatio: {
+    fontFamily: fontFamily.medium, fontSize: 9, color: colors.textMuted,
+    letterSpacing: 0.6, marginTop: 1, textTransform: 'uppercase',
+  },
+  ghRowBarTrack: { height: 3, backgroundColor: colors.background, marginHorizontal: -spacing.md },
+  ghRowBarFill: { height: '100%', backgroundColor: '#22C55E' },
+  ghRowBarFillFull: { backgroundColor: '#15803D' },
 
   emptyCard: {
-    alignItems: 'center', backgroundColor: colors.surface, borderRadius: borderRadius.lg,
+    alignItems: 'center', backgroundColor: colors.surface, borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
     padding: spacing.xl, marginBottom: spacing.sm, gap: spacing.xs,
   },
@@ -404,7 +474,7 @@ const s = StyleSheet.create({
   emptyCtaText: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.textOnPrimary },
 
   actionsWrap: { marginTop: spacing.sm },
-  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  actionsRow: { gap: spacing.sm, paddingBottom: 4 },
   actionChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: colors.surface, borderRadius: borderRadius.full,

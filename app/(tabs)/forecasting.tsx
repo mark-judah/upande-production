@@ -20,6 +20,7 @@ import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import { useHarvestingStore } from '@/src/stores/harvestingStore';
 import { useProductionProjectionStore } from '@/src/stores/productionProjectionStore';
 import type { ProjectionUpdateRow } from '@/src/services/production-projection';
+import { ForecastThisWeek } from '@/src/components/ForecastThisWeek';
 
 /**
  * Forecasting — laid out like mona-shelve's Production Planning screen:
@@ -48,6 +49,7 @@ const COLOUR_FG: Record<string, string> = {
 };
 
 type ViewMode = 'edit' | 'compare';
+type ScreenMode = 'thisWeek' | 'browse';
 
 export default function ForecastingScreen() {
   const { showSuccess, showError } = useToast();
@@ -73,6 +75,7 @@ export default function ForecastingScreen() {
   const currentWeek = useMemo(() => getISOWeek(new Date()), []);
 
   const [search, setSearch] = useState('');
+  const [screenMode, setScreenMode] = useState<ScreenMode>('thisWeek');
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
   const [expandedGreenhouse, setExpandedGreenhouse] = useState<string | null>(null);
   const [variety, setVariety] = useState('');
@@ -215,15 +218,15 @@ export default function ForecastingScreen() {
         <View style={s.modeBar}>
           <Text style={s.yearText}>Year <Text style={s.yearStrong}>{year}</Text></Text>
           <View style={s.segmented}>
-            {(['edit', 'compare'] as ViewMode[]).map((m) => (
+            {(['thisWeek', 'browse'] as ScreenMode[]).map((m) => (
               <TouchableOpacity
                 key={m}
-                style={[s.segItem, viewMode === m && s.segItemActive]}
-                onPress={() => setViewMode(m)}
+                style={[s.segItem, screenMode === m && s.segItemActive]}
+                onPress={() => setScreenMode(m)}
                 activeOpacity={0.7}
               >
-                <Text style={[s.segText, viewMode === m && s.segTextActive]}>
-                  {m === 'edit' ? 'Edit' : 'Compare'}
+                <Text style={[s.segText, screenMode === m && s.segTextActive]}>
+                  {m === 'thisWeek' ? 'This Week' : 'Browse'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -241,18 +244,46 @@ export default function ForecastingScreen() {
           <TouchableOpacity onPress={() => stepWeek(1)} style={s.weekNavArrow} hitSlop={8}>
             <Ionicons name="chevron-forward" size={18} color={colors.text} />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setWeekFilter((w) => (w === 'all' ? currentWeek : 'all'))}
-            style={s.weekNavToggle}
-            activeOpacity={0.7}
-          >
-            <Text style={s.weekNavToggleText}>{weekFilter === 'all' ? 'Just this week' : 'All weeks'}</Text>
-          </TouchableOpacity>
+          {screenMode === 'browse' ? (
+            <TouchableOpacity
+              onPress={() => setWeekFilter((w) => (w === 'all' ? currentWeek : 'all'))}
+              style={s.weekNavToggle}
+              activeOpacity={0.7}
+            >
+              <Text style={s.weekNavToggleText}>{weekFilter === 'all' ? 'Just this week' : 'All weeks'}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
+        {screenMode === 'thisWeek' ? (
+          <ForecastThisWeek
+            greenhouses={greenhouses}
+            year={year}
+            weekNo={weekFilter === 'all' ? currentWeek : weekFilter}
+            currentWeek={currentWeek}
+          />
+        ) : (
+        <>
         <View style={s.summary}>
           <Text style={s.summaryValue}>{greenhouses.length}</Text>
           <Text style={s.summaryLabel}>greenhouses with a projection</Text>
+        </View>
+
+        <View style={s.browseSegRow}>
+          <View style={s.segmented}>
+            {(['edit', 'compare'] as ViewMode[]).map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[s.segItem, viewMode === m && s.segItemActive]}
+                onPress={() => setViewMode(m)}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.segText, viewMode === m && s.segTextActive]}>
+                  {m === 'edit' ? 'Edit' : 'Compare'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {greenhouses.length > 0 ? (
@@ -474,6 +505,8 @@ export default function ForecastingScreen() {
             );
           })
         )}
+        </>
+        )}
       </KeyboardAwareScrollView>
     </View>
   );
@@ -545,6 +578,8 @@ const s = StyleSheet.create({
     borderRadius: borderRadius.full, backgroundColor: colors.surfaceAlt,
   },
   weekNavToggleText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
+
+  browseSegRow: { flexDirection: 'row', marginBottom: spacing.md },
 
   summary: {
     flexDirection: 'row', alignItems: 'baseline', gap: 6,
