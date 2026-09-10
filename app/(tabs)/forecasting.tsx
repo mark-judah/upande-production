@@ -70,10 +70,22 @@ export default function ForecastingScreen() {
   const clearProjection = useProductionProjectionStore((s) => s.clear);
 
   const year = String(new Date().getFullYear());
+  const currentWeek = useMemo(() => getISOWeek(new Date()), []);
+
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
   const [expandedGreenhouse, setExpandedGreenhouse] = useState<string | null>(null);
   const [variety, setVariety] = useState('');
+  // Most supervisors only care about "this week" at a time, not a 52-row
+  // scroll through the whole year — default to it, let them page or opt
+  // into the full list.
+  const [weekFilter, setWeekFilter] = useState<number | 'all'>(currentWeek);
+  const stepWeek = (delta: number) => {
+    setWeekFilter((w) => {
+      const base = w === 'all' ? currentWeek : w;
+      return Math.min(53, Math.max(1, base + delta));
+    });
+  };
 
   const [editedForecasts, setEditedForecasts] = useState<Record<string, number>>({});
   const [editedComments, setEditedComments] = useState<Record<string, string>>({});
@@ -123,8 +135,6 @@ export default function ForecastingScreen() {
     return greenhouses.filter((g) => g.label.toLowerCase().includes(q));
   }, [greenhouses, search]);
 
-  const currentWeek = useMemo(() => getISOWeek(new Date()), []);
-
   const lastWeek = useMemo(() => {
     if (!projection) return null;
     return projection.weeks.find((w) => w.weekNo === currentWeek - 1) ?? null;
@@ -152,6 +162,11 @@ export default function ForecastingScreen() {
       { budget: 0, actual: 0, revised: 0 },
     );
   }, [projection, editedForecasts]);
+
+  const visibleWeeks = useMemo(() => {
+    if (!projection) return [];
+    return weekFilter === 'all' ? projection.weeks : projection.weeks.filter((w) => w.weekNo === weekFilter);
+  }, [projection, weekFilter]);
 
   const editCount = Object.keys(editedForecasts).length + Object.keys(editedComments).length;
 
@@ -213,6 +228,26 @@ export default function ForecastingScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        <View style={s.weekNav}>
+          <TouchableOpacity onPress={() => stepWeek(-1)} style={s.weekNavArrow} hitSlop={8}>
+            <Ionicons name="chevron-back" size={18} color={colors.text} />
+          </TouchableOpacity>
+          <View style={s.weekNavLabelWrap}>
+            <Text style={s.weekNavLabel}>{weekFilter === 'all' ? 'All weeks' : `Week ${weekFilter}`}</Text>
+            {weekFilter === currentWeek ? <Pill value="NOW" tone="success" /> : null}
+          </View>
+          <TouchableOpacity onPress={() => stepWeek(1)} style={s.weekNavArrow} hitSlop={8}>
+            <Ionicons name="chevron-forward" size={18} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setWeekFilter((w) => (w === 'all' ? currentWeek : 'all'))}
+            style={s.weekNavToggle}
+            activeOpacity={0.7}
+          >
+            <Text style={s.weekNavToggleText}>{weekFilter === 'all' ? 'Just this week' : 'All weeks'}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={s.summary}>
@@ -344,7 +379,10 @@ export default function ForecastingScreen() {
                         ) : null}
 
                         <Text style={s.weeksTitle}>Weekly {viewMode === 'edit' ? 'projections' : 'comparison'}</Text>
-                        {projection.weeks.map((w) => {
+                        {visibleWeeks.length === 0 ? (
+                          <Text style={s.emptyText}>No data for that week.</Text>
+                        ) : null}
+                        {visibleWeeks.map((w) => {
                           const isCurrent = w.weekNo === currentWeek;
                           const edited = editedForecasts[w.name];
                           const currentRevised = edited ?? w.revisedForecast;
@@ -490,6 +528,23 @@ const s = StyleSheet.create({
   segItemActive: { backgroundColor: colors.primary },
   segText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
   segTextActive: { color: colors.textOnPrimary },
+
+  weekNav: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  weekNavArrow: {
+    width: 32, height: 32, borderRadius: borderRadius.md,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+  },
+  weekNavLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, justifyContent: 'center' },
+  weekNavLabel: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
+  weekNavToggle: {
+    marginLeft: 'auto', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full, backgroundColor: colors.surfaceAlt,
+  },
+  weekNavToggleText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
 
   summary: {
     flexDirection: 'row', alignItems: 'baseline', gap: 6,
