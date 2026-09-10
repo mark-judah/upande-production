@@ -12,6 +12,7 @@ import { useToast } from '@/src/components/Toast';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useReportsStore } from '@/src/stores/reportsStore';
 import { cropCycleApi, type PickerOption } from '@/src/services/crop-cycle';
+import type { VarietyRow } from '@/src/services/reports';
 
 export default function ProductionReportScreen() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function ProductionReportScreen() {
   const [farms, setFarms] = useState<PickerOption[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'harvested' | 'received'>('harvested');
+  const [groupBy, setGroupBy] = useState<'farm' | 'greenhouse'>('farm');
 
   useEffect(() => {
     cropCycleApi.listFarms().then(setFarms).catch(() => {});
@@ -48,9 +50,20 @@ export default function ProductionReportScreen() {
     });
 
   const fmt = (n: number) => n.toLocaleString();
-  const activeFarms = report ? (mode === 'harvested' ? report.farms : report.receivedFarms) : [];
   const activeTotal = report ? (mode === 'harvested' ? report.totalStems : report.receivedTotalStems) : 0;
-  const isEmpty = !loading && report != null && activeFarms.length === 0;
+  // Farm and greenhouse rows carry the same shape (stems + varieties), just
+  // under a different label field -- normalize to one shape so the drill-down
+  // below doesn't need to branch on groupBy at all.
+  const activeGroups: Array<{ key: string; label: string; stems: number; varieties: VarietyRow[] }> = report
+    ? (groupBy === 'farm'
+        ? (mode === 'harvested' ? report.farms : report.receivedFarms).map((f) => ({
+            key: f.farm, label: f.farm, stems: f.stems, varieties: f.varieties,
+          }))
+        : (mode === 'harvested' ? report.greenhouses : report.receivedGreenhouses).map((g) => ({
+            key: g.greenhouse, label: g.greenhouse, stems: g.stems, varieties: g.varieties,
+          })))
+    : [];
+  const isEmpty = !loading && report != null && activeGroups.length === 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -83,6 +96,15 @@ export default function ProductionReportScreen() {
           ]}
         />
 
+        <Segmented
+          value={groupBy}
+          onChange={setGroupBy}
+          options={[
+            { value: 'farm', label: 'By farm' },
+            { value: 'greenhouse', label: 'By greenhouse' },
+          ]}
+        />
+
         {loading ? (
           <Card><Spinner label="Loading…" /></Card>
         ) : isEmpty ? (
@@ -93,33 +115,33 @@ export default function ProductionReportScreen() {
           </Card>
         ) : report ? (
           <Card>
-            {activeFarms.map((f, fi) => {
-              const fKey = `${mode}/farm:${f.farm}`;
-              const fOpen = !collapsed.has(fKey);
+            {activeGroups.map((g, gi) => {
+              const gKey = `${mode}/${groupBy}:${g.key}`;
+              const gOpen = !collapsed.has(gKey);
               return (
-                <View key={fKey} style={fi > 0 ? { marginTop: spacing.lg } : undefined}>
-                  <Pressable style={s.farmRow} onPress={() => toggle(fKey)}>
-                    <Ionicons name={fOpen ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.text} />
-                    <Text style={s.farmName}>{f.farm}</Text>
-                    <Text style={s.farmStems}>{fmt(f.stems)} stems</Text>
+                <View key={gKey} style={gi > 0 ? { marginTop: spacing.lg } : undefined}>
+                  <Pressable style={s.farmRow} onPress={() => toggle(gKey)}>
+                    <Ionicons name={gOpen ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.text} />
+                    <Text style={s.farmName}>{g.label}</Text>
+                    <Text style={s.farmStems}>{fmt(g.stems)} stems</Text>
                   </Pressable>
 
-                  {fOpen && (
+                  {gOpen && (
                     <View style={s.table}>
                       <View style={[s.tr, s.thead]}>
                         <Text style={[s.th, s.colVariety]}>Variety</Text>
                         <Text style={[s.th, s.colLength]}>Length</Text>
                         <Text style={[s.th, s.colStems, s.right]}>Stems</Text>
                       </View>
-                      {f.varieties.map((v) => (
-                        <View key={`${fKey}/var:${v.variety}`}>
+                      {g.varieties.map((v) => (
+                        <View key={`${gKey}/var:${v.variety}`}>
                           <View style={[s.tr, s.varHead]}>
                             <Text style={[s.tdVariety, s.colVariety]}>{v.variety}</Text>
                             <Text style={[s.td, s.colLength]} />
                             <Text style={[s.tdVariety, s.colStems, s.right]}>{fmt(v.stems)}</Text>
                           </View>
                           {v.stemLengths.map((sl) => (
-                            <View key={`${fKey}/var:${v.variety}/sl:${sl.stemLength}`} style={s.tr}>
+                            <View key={`${gKey}/var:${v.variety}/sl:${sl.stemLength}`} style={s.tr}>
                               <Text style={[s.td, s.colVariety]} />
                               <Text style={[s.td, s.colLength]}>{sl.stemLength}</Text>
                               <Text style={[s.td, s.colStems, s.right]}>{fmt(sl.stems)}</Text>

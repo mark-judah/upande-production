@@ -3,8 +3,15 @@ import type { PickerOption } from './crop-cycle';
 
 export interface VarietyOption extends PickerOption {
   area?: number;
-  /** Item group of the variety's Item (e.g. "Spray Roses", "Standard Roses"). */
+  /** Item group of the variety's Item -- always a LEAF group (e.g. "Spray
+   *  Roses - Bombastics"), never the bare "Spray Roses"/"Standard Roses"
+   *  parent, since real items are never assigned directly to a parent
+   *  group. Don't filter on this directly -- use isSprayRose. */
   itemGroup?: string;
+  /** True if this variety is anywhere under the Spray Roses item group tree
+   *  (computed server-side via the real ancestor chain, not a string
+   *  match against itemGroup). */
+  isSprayRose?: boolean;
 }
 
 export interface EmployeeOption extends PickerOption {}
@@ -36,7 +43,7 @@ export interface HarvestOutcome {
 
 interface RawGreenhouseData {
   data?: {
-    varieties?: Array<{ variety?: string; area?: number; item_group?: string }>;
+    varieties?: Array<{ variety?: string; area?: number; item_group?: string; is_spray_rose?: boolean }>;
     employees?: Array<{ employee_name?: string }>;
     cut_stages?: string[];
     notice?: string | null;
@@ -61,6 +68,7 @@ export const harvestingApi = {
       label: String(v.variety ?? ''),
       area: typeof v.area === 'number' ? v.area : undefined,
       itemGroup: v.item_group ? String(v.item_group) : undefined,
+      isSprayRose: !!v.is_spray_rose,
     }));
     const employees = (body.data?.employees ?? []).map<EmployeeOption>((e) => ({
       name: String(e.employee_name ?? ''),

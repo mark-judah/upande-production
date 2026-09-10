@@ -38,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Planning', icon: 'calendar-outline', route: '/planning' },
   { label: 'Field Rejects', icon: 'warning-outline', route: '/field-rejects' },
   { label: 'Reports', icon: 'bar-chart-outline', route: '/reports' },
+  { label: 'Bucket Status', icon: 'cube-outline', route: '/bucket-status' },
 ];
 
 export function DrawerMenu() {

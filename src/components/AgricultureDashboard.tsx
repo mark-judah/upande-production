@@ -191,6 +191,7 @@ export function AgricultureDashboard() {
         <View style={s.actionsRow}>
           <ActionChip icon="cut-outline" label="Harvesting" onPress={() => router.push('/harvesting' as any)} />
           <ActionChip icon="bar-chart-outline" label="Production report" onPress={() => router.push('/reports/production' as any)} />
+          <ActionChip icon="cube-outline" label="Bucket status" onPress={() => router.push('/bucket-status' as any)} />
           <ActionChip icon="warning-outline" label="Field rejects" onPress={() => router.push('/field-rejects' as any)} />
           <ActionChip icon="leaf-outline" label="Crop cycle" onPress={() => router.push('/crop-cycle' as any)} />
         </View>
