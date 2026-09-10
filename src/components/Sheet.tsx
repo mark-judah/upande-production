@@ -3,6 +3,8 @@ import {
   Animated,
   Dimensions,
   Easing,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -105,7 +107,11 @@ export function Sheet({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
 
-      <View style={s.panelWrap} pointerEvents="box-none">
+      <KeyboardAvoidingView
+        style={s.panelWrap}
+        pointerEvents="box-none"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <Animated.View
           onLayout={(e) => {
             const layoutY = e.nativeEvent.layout.y;
@@ -129,7 +135,7 @@ export function Sheet({
           </View>
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
