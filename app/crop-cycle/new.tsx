@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -118,7 +119,13 @@ export default function NewCropCycleScreen() {
         <View style={s.headerBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        enableOnAndroid
+        extraScrollHeight={40}
+      >
         <Card title="Greenhouse">
           <Dropdown
             label="Greenhouse"
@@ -191,7 +198,7 @@ export default function NewCropCycleScreen() {
 
         <Button label="Create crop cycle" onPress={onSubmit} loading={acting} style={{ marginTop: spacing.sm }} />
         <Text style={s.note}>Beds, varieties grown and totals are generated automatically from the bed configuration.</Text>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
