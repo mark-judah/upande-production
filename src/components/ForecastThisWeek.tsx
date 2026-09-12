@@ -50,11 +50,19 @@ export function ForecastThisWeek({
   year,
   weekNo,
   currentWeek,
+  search = '',
+  offBudgetOnly = false,
 }: {
   greenhouses: PickerOption[];
   year: string;
   weekNo: number;
   currentWeek: number;
+  /** Filters rows by greenhouse or variety name. Owned by the screen (shared
+   *  with Browse mode's search box) rather than this component. */
+  search?: string;
+  /** Owned by the screen's filter sheet, not this component, so it can be
+   *  reset centrally and shown/hidden alongside the other filter controls. */
+  offBudgetOnly?: boolean;
 }) {
   const { showError } = useToast();
 
@@ -64,7 +72,6 @@ export function ForecastThisWeek({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
-  const [offBudgetOnly, setOffBudgetOnly] = useState(false);
 
   const inputRefs = useRef<Record<string, TextInput | null>>({});
   const loadSeq = useRef(0);
@@ -76,13 +83,6 @@ export function ForecastThisWeek({
 
   const hasActualContext = weekNo <= currentWeek;
   const isCommentWeek = weekNo === currentWeek - 1;
-
-  // The off-budget filter's toggle only renders when hasActualContext is
-  // true; reset it on every week change so it can never get stuck "on" with
-  // no visible control left to turn it off (e.g. paging into a future week).
-  useEffect(() => {
-    setOffBudgetOnly(false);
-  }, [weekNo]);
 
   useEffect(() => {
     const seq = ++loadSeq.current;
@@ -134,13 +134,17 @@ export function ForecastThisWeek({
   };
 
   const sortedRows = useMemo(() => {
-    const filtered = offBudgetOnly
-      ? rows.filter((r) => hasActualContext && r.week.actualHarvest !== r.week.projectedQty)
+    const q = search.trim().toLowerCase();
+    let filtered = q
+      ? rows.filter((r) => r.greenhouseLabel.toLowerCase().includes(q) || r.varietyLabel.toLowerCase().includes(q))
       : rows;
+    if (offBudgetOnly) {
+      filtered = filtered.filter((r) => hasActualContext && r.week.actualHarvest !== r.week.projectedQty);
+    }
     const flagged = filtered.filter(isFlagged);
     const rest = filtered.filter((r) => !isFlagged(r));
     return [...flagged, ...rest];
-  }, [rows, offBudgetOnly, hasActualContext, isCommentWeek]);
+  }, [rows, search, offBudgetOnly, hasActualContext, isCommentWeek]);
 
   const filledCount = rows.filter((r) => (r.week.revisedForecast || 0) > 0).length;
 
@@ -195,22 +199,11 @@ export function ForecastThisWeek({
 
   return (
     <View>
-      <View style={s.progressRow}>
-        <Text style={s.progressText}>
-          {loading && rows.length === 0
-            ? `Loading… ${progress.done}/${progress.total} greenhouses`
-            : `${filledCount} of ${rows.length} filled`}
-        </Text>
-        {hasActualContext ? (
-          <TouchableOpacity
-            onPress={() => setOffBudgetOnly((v) => !v)}
-            style={[s.filterChip, offBudgetOnly && s.filterChipActive]}
-            activeOpacity={0.7}
-          >
-            <Text style={[s.filterChipText, offBudgetOnly && s.filterChipTextActive]}>Off-budget only</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      <Text style={s.progressText}>
+        {loading && rows.length === 0
+          ? `Loading… ${progress.done}/${progress.total} greenhouses`
+          : `${filledCount} of ${rows.length} filled`}
+      </Text>
 
       {loading && rows.length === 0 ? (
         <View style={s.loadingCard}>
@@ -218,6 +211,8 @@ export function ForecastThisWeek({
         </View>
       ) : rows.length === 0 ? (
         <Text style={s.emptyText}>No projections found for week {weekNo}.</Text>
+      ) : sortedRows.length === 0 ? (
+        <Text style={s.emptyText}>No match{search ? ` for "${search}"` : ''}.</Text>
       ) : (
         sortedRows.map((row, idx) => {
           const flagged = isFlagged(row);
@@ -295,12 +290,7 @@ function RowStatusIcon({ status }: { status: RowStatus }) {
 }
 
 const s = StyleSheet.create({
-  progressRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-  progressText: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
-  filterChip: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, backgroundColor: colors.surfaceAlt },
-  filterChipActive: { backgroundColor: colors.primary },
-  filterChipText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
-  filterChipTextActive: { color: colors.textOnPrimary },
+  progressText: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.md },
 
   loadingCard: { paddingVertical: spacing.xl, alignItems: 'center' },
   emptyText: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.lg },

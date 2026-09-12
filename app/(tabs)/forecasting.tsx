@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  RefreshControl,
+  Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { getISOWeek } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,46 +21,37 @@ import { useRefreshOnFocus } from '@/src/hooks/useRefreshOnFocus';
 import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import { useHarvestingStore } from '@/src/stores/harvestingStore';
 import { useProductionProjectionStore } from '@/src/stores/productionProjectionStore';
-import type { ProjectionUpdateRow } from '@/src/services/production-projection';
 import { ForecastThisWeek } from '@/src/components/ForecastThisWeek';
+import type { ProjectionUpdateRow } from '@/src/services/production-projection';
 
 /**
- * Forecasting — laid out like mona-shelve's Production Planning screen:
- * every greenhouse listed up front (searchable, collapsible), an Edit /
- * Compare toggle, and a summary line instead of a bare picker form. The
- * underlying data is still one full-year Production Projection per
- * (greenhouse, variety) — this restyles the container, it doesn't change
- * what's fetched or saved.
+ * Forecasting — the screen exists to fill in Revised, so "This Week" (the
+ * entry checklist in ForecastThisWeek) is the whole point and the default.
+ * Everything else — which week, This Week vs. the full-year Browse view,
+ * off-budget filtering — is a way of narrowing that one job, not a
+ * permanent fixture, so it lives behind the filter sheet instead of a
+ * stack of always-visible header bars. The screen itself shows only
+ * search + filter + overflow, matching the app-wide header (title +
+ * hamburger) rather than adding a second one under it.
  */
 
 const COLOUR_BG: Record<string, string> = {
-  RED: '#FEE2E2',
-  PINK: '#FCE7F3',
-  WHITE: '#F4F4F5',
-  YELLOW: '#FEF3C7',
-  ORANGE: '#FFEDD5',
-  PEACH: '#FFE4D6',
+  RED: '#FEE2E2', PINK: '#FCE7F3', WHITE: '#F4F4F5',
+  YELLOW: '#FEF3C7', ORANGE: '#FFEDD5', PEACH: '#FFE4D6',
 };
 const COLOUR_FG: Record<string, string> = {
-  RED: '#991B1B',
-  PINK: '#9D174D',
-  WHITE: '#3F3F46',
-  YELLOW: '#92400E',
-  ORANGE: '#9A3412',
-  PEACH: '#9A3412',
+  RED: '#991B1B', PINK: '#9D174D', WHITE: '#3F3F46',
+  YELLOW: '#92400E', ORANGE: '#9A3412', PEACH: '#9A3412',
 };
 
-type ViewMode = 'edit' | 'compare';
 type ScreenMode = 'thisWeek' | 'browse';
+type ViewMode = 'edit' | 'compare';
 
 export default function ForecastingScreen() {
   const { showSuccess, showError } = useToast();
   const greenhouses = useCropCycleStore((s) => s.greenhouses);
   const loadPickers = useCropCycleStore((s) => s.loadPickers);
 
-  // Reuse the per-greenhouse variety loader from the harvesting store. Only
-  // one greenhouse card is ever expanded at a time, so its single-slot
-  // `varieties` cache never collides across cards.
   const varieties = useHarvestingStore((s) => s.varieties);
   const ghDataLoading = useHarvestingStore((s) => s.ghDataLoading);
   const loadGreenhouseData = useHarvestingStore((s) => s.loadGreenhouseData);
@@ -76,13 +69,12 @@ export default function ForecastingScreen() {
 
   const [search, setSearch] = useState('');
   const [screenMode, setScreenMode] = useState<ScreenMode>('thisWeek');
-  const [viewMode, setViewMode] = useState<ViewMode>('edit');
-  const [expandedGreenhouse, setExpandedGreenhouse] = useState<string | null>(null);
-  const [variety, setVariety] = useState('');
-  // Most supervisors only care about "this week" at a time, not a 52-row
-  // scroll through the whole year — default to it, let them page or opt
-  // into the full list.
   const [weekFilter, setWeekFilter] = useState<number | 'all'>(currentWeek);
+  const [offBudgetOnly, setOffBudgetOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('edit');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const stepWeek = (delta: number) => {
     setWeekFilter((w) => {
       const base = w === 'all' ? currentWeek : w;
@@ -90,25 +82,17 @@ export default function ForecastingScreen() {
     });
   };
 
+  useEffect(() => {
+    setOffBudgetOnly(false);
+  }, [weekFilter]);
+
+  // Browse mode only, below.
+  const [expandedGreenhouse, setExpandedGreenhouse] = useState<string | null>(null);
+  const [variety, setVariety] = useState('');
   const [editedForecasts, setEditedForecasts] = useState<Record<string, number>>({});
   const [editedComments, setEditedComments] = useState<Record<string, string>>({});
-  const [refreshing, setRefreshing] = useState(false);
 
   useRefreshOnFocus(loadPickers);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      setExpandedGreenhouse(null);
-      setVariety('');
-      setEditedForecasts({});
-      setEditedComments({});
-      clearProjection();
-      await loadPickers();
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   const toggleGreenhouse = (gh: string) => {
     setEditedForecasts({});
@@ -117,20 +101,20 @@ export default function ForecastingScreen() {
   };
 
   useEffect(() => {
-    if (expandedGreenhouse) {
+    if (screenMode === 'browse' && expandedGreenhouse) {
       loadGreenhouseData(expandedGreenhouse);
       setVariety('');
       clearProjection();
     }
-  }, [expandedGreenhouse, loadGreenhouseData, clearProjection]);
+  }, [screenMode, expandedGreenhouse, loadGreenhouseData, clearProjection]);
 
   useEffect(() => {
-    if (expandedGreenhouse && variety) {
+    if (screenMode === 'browse' && expandedGreenhouse && variety) {
       setEditedForecasts({});
       setEditedComments({});
       fetchProjection(expandedGreenhouse, variety, year);
     }
-  }, [expandedGreenhouse, variety, year, fetchProjection]);
+  }, [screenMode, expandedGreenhouse, variety, year, fetchProjection]);
 
   const filteredGreenhouses = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -205,108 +189,54 @@ export default function ForecastingScreen() {
   const colourBg = projection ? (COLOUR_BG[projection.colour] ?? colors.surfaceAlt) : colors.surfaceAlt;
   const colourFg = projection ? (COLOUR_FG[projection.colour] ?? colors.text) : colors.text;
 
+  const activeFilters = (weekFilter !== currentWeek ? 1 : 0) + (offBudgetOnly ? 1 : 0) + (screenMode === 'browse' ? 1 : 0);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={s.topBar}>
+        <View style={s.searchWrap}>
+          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+          <TextInput
+            style={s.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search greenhouse or variety…"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {search.length > 0 ? (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <TouchableOpacity style={s.iconBtn} onPress={() => setFilterOpen(true)} hitSlop={6}>
+          <Ionicons name="options-outline" size={19} color={colors.text} />
+          {activeFilters > 0 ? <View style={s.iconBtnDot} /> : null}
+        </TouchableOpacity>
+        <TouchableOpacity style={s.iconBtn} onPress={() => setMenuOpen(true)} hitSlop={6}>
+          <Ionicons name="ellipsis-vertical" size={19} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
       <KeyboardAwareScrollView
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid
         extraScrollHeight={20}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={s.modeBar}>
-          <Text style={s.yearText}>Year <Text style={s.yearStrong}>{year}</Text></Text>
-          <View style={s.segmented}>
-            {(['thisWeek', 'browse'] as ScreenMode[]).map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[s.segItem, screenMode === m && s.segItemActive]}
-                onPress={() => setScreenMode(m)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.segText, screenMode === m && s.segTextActive]}>
-                  {m === 'thisWeek' ? 'This Week' : 'Browse'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        <View style={s.weekNav}>
-          <TouchableOpacity onPress={() => stepWeek(-1)} style={s.weekNavArrow} hitSlop={8}>
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
-          </TouchableOpacity>
-          <View style={s.weekNavLabelWrap}>
-            <Text style={s.weekNavLabel}>{weekFilter === 'all' ? 'All weeks' : `Week ${weekFilter}`}</Text>
-            {weekFilter === currentWeek ? <Pill value="NOW" tone="success" /> : null}
-          </View>
-          <TouchableOpacity onPress={() => stepWeek(1)} style={s.weekNavArrow} hitSlop={8}>
-            <Ionicons name="chevron-forward" size={18} color={colors.text} />
-          </TouchableOpacity>
-          {screenMode === 'browse' ? (
-            <TouchableOpacity
-              onPress={() => setWeekFilter((w) => (w === 'all' ? currentWeek : 'all'))}
-              style={s.weekNavToggle}
-              activeOpacity={0.7}
-            >
-              <Text style={s.weekNavToggleText}>{weekFilter === 'all' ? 'Just this week' : 'All weeks'}</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
         {screenMode === 'thisWeek' ? (
           <ForecastThisWeek
             greenhouses={greenhouses}
             year={year}
             weekNo={weekFilter === 'all' ? currentWeek : weekFilter}
             currentWeek={currentWeek}
+            search={search}
+            offBudgetOnly={offBudgetOnly}
           />
-        ) : (
-        <>
-        <View style={s.summary}>
-          <Text style={s.summaryValue}>{greenhouses.length}</Text>
-          <Text style={s.summaryLabel}>greenhouses with a projection</Text>
-        </View>
-
-        <View style={s.browseSegRow}>
-          <View style={s.segmented}>
-            {(['edit', 'compare'] as ViewMode[]).map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[s.segItem, viewMode === m && s.segItemActive]}
-                onPress={() => setViewMode(m)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.segText, viewMode === m && s.segTextActive]}>
-                  {m === 'edit' ? 'Edit' : 'Compare'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {greenhouses.length > 0 ? (
-          <View style={s.searchWrap}>
-            <Ionicons name="search-outline" size={16} color={colors.textMuted} style={s.searchIcon} />
-            <TextInput
-              style={s.searchInput}
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search greenhouse…"
-              placeholderTextColor={colors.textMuted}
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            {search.length > 0 ? (
-              <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        ) : null}
-
-        {greenhouses.length === 0 ? (
+        ) : greenhouses.length === 0 ? (
           <Text style={s.emptyText}>No greenhouses available</Text>
         ) : filteredGreenhouses.length === 0 ? (
           <Text style={s.emptyText}>No greenhouse matches "{search}"</Text>
@@ -319,9 +249,7 @@ export default function ForecastingScreen() {
                 <TouchableOpacity style={s.ghHeader} activeOpacity={0.7} onPress={() => toggleGreenhouse(gh.name)}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.ghName}>{gh.label}</Text>
-                    {open && variety ? (
-                      <Text style={s.ghMeta} numberOfLines={1}>{varietyLabel}</Text>
-                    ) : null}
+                    {open && variety ? <Text style={s.ghMeta} numberOfLines={1}>{varietyLabel}</Text> : null}
                   </View>
                   <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -341,18 +269,14 @@ export default function ForecastingScreen() {
                             onPress={() => setVariety(v.name)}
                             activeOpacity={0.7}
                           >
-                            <Text style={[s.varietyChipText, variety === v.name && s.varietyChipTextActive]}>
-                              {v.label}
-                            </Text>
+                            <Text style={[s.varietyChipText, variety === v.name && s.varietyChipTextActive]}>{v.label}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
                     )}
 
                     {error ? <Alert tone="danger">{error}</Alert> : null}
-
                     {loading ? <Spinner label="Loading projection…" /> : null}
-
                     {!loading && variety && !projection && !error ? (
                       <Alert tone="info">No projection yet for this variety.</Alert>
                     ) : null}
@@ -392,8 +316,7 @@ export default function ForecastingScreen() {
                               </Text>
                             </View>
                             <Text style={[s.muted, { marginTop: 4 }]}>
-                              A comment is required when the actual harvest deviates from the projected qty by
-                              10% or more.
+                              A comment is required when the actual harvest deviates from the projected qty by 10% or more.
                             </Text>
                             <View style={{ height: spacing.md }} />
                             <Text style={s.fieldLabel}>Comment (required)</Text>
@@ -410,19 +333,14 @@ export default function ForecastingScreen() {
                         ) : null}
 
                         <Text style={s.weeksTitle}>Weekly {viewMode === 'edit' ? 'projections' : 'comparison'}</Text>
-                        {visibleWeeks.length === 0 ? (
-                          <Text style={s.emptyText}>No data for that week.</Text>
-                        ) : null}
+                        {visibleWeeks.length === 0 ? <Text style={s.emptyText}>No data for that week.</Text> : null}
                         {visibleWeeks.map((w) => {
                           const isCurrent = w.weekNo === currentWeek;
                           const edited = editedForecasts[w.name];
                           const currentRevised = edited ?? w.revisedForecast;
-                          const pctOfBudget = w.projectedQty > 0
-                            ? Math.round((w.actualHarvest / w.projectedQty) * 100)
-                            : 0;
+                          const pctOfBudget = w.projectedQty > 0 ? Math.round((w.actualHarvest / w.projectedQty) * 100) : 0;
                           const weekVariance = w.actualHarvest - w.projectedQty;
-                          const varianceColor =
-                            weekVariance > 0 ? colors.success : weekVariance < 0 ? colors.error : colors.textMuted;
+                          const varianceColor = weekVariance > 0 ? colors.success : weekVariance < 0 ? colors.error : colors.textMuted;
 
                           return (
                             <View key={w.name} style={[s.weekRow, isCurrent && s.weekRowCurrent]}>
@@ -485,16 +403,9 @@ export default function ForecastingScreen() {
                         })}
 
                         {viewMode === 'edit' && editCount > 0 ? (
-                          <TouchableOpacity
-                            onPress={onSave}
-                            disabled={acting}
-                            activeOpacity={0.85}
-                            style={[s.saveBtn, acting && { opacity: 0.6 }]}
-                          >
+                          <TouchableOpacity onPress={onSave} disabled={acting} activeOpacity={0.85} style={[s.saveBtn, acting && { opacity: 0.6 }]}>
                             <Ionicons name="save-outline" size={18} color={colors.textOnPrimary} />
-                            <Text style={s.saveBtnText}>
-                              {acting ? 'Saving…' : `Save ${editCount} change${editCount === 1 ? '' : 's'}`}
-                            </Text>
+                            <Text style={s.saveBtnText}>{acting ? 'Saving…' : `Save ${editCount} change${editCount === 1 ? '' : 's'}`}</Text>
                           </TouchableOpacity>
                         ) : null}
                       </View>
@@ -505,10 +416,168 @@ export default function ForecastingScreen() {
             );
           })
         )}
-        </>
-        )}
       </KeyboardAwareScrollView>
+
+      <FilterSheet
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        year={year}
+        screenMode={screenMode}
+        setScreenMode={setScreenMode}
+        weekFilter={weekFilter}
+        setWeekFilter={setWeekFilter}
+        stepWeek={stepWeek}
+        currentWeek={currentWeek}
+        offBudgetOnly={offBudgetOnly}
+        setOffBudgetOnly={setOffBudgetOnly}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+      />
+
+      <MenuSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onRefresh={() => {
+          loadPickers();
+          setMenuOpen(false);
+        }}
+        onGoToLastWeek={() => {
+          setScreenMode('thisWeek');
+          setWeekFilter(currentWeek - 1);
+          setMenuOpen(false);
+        }}
+      />
     </View>
+  );
+}
+
+function FilterSheet({
+  visible,
+  onClose,
+  year,
+  screenMode,
+  setScreenMode,
+  weekFilter,
+  setWeekFilter,
+  stepWeek,
+  currentWeek,
+  offBudgetOnly,
+  setOffBudgetOnly,
+  viewMode,
+  setViewMode,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  year: string;
+  screenMode: ScreenMode;
+  setScreenMode: (m: ScreenMode) => void;
+  weekFilter: number | 'all';
+  setWeekFilter: React.Dispatch<React.SetStateAction<number | 'all'>>;
+  stepWeek: (delta: number) => void;
+  currentWeek: number;
+  offBudgetOnly: boolean;
+  setOffBudgetOnly: (v: boolean) => void;
+  viewMode: ViewMode;
+  setViewMode: (m: ViewMode) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[s.modalSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitle}>Filter</Text>
+            <TouchableOpacity onPress={onClose} style={s.modalCloseBtn} hitSlop={8}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={s.filterLabel}>VIEW</Text>
+          <View style={s.segmented}>
+            {(['thisWeek', 'browse'] as ScreenMode[]).map((m) => (
+              <TouchableOpacity
+                key={m}
+                style={[s.segItem, screenMode === m && s.segItemActive]}
+                onPress={() => setScreenMode(m)}
+              >
+                <Text style={[s.segText, screenMode === m && s.segTextActive]}>{m === 'thisWeek' ? 'This Week' : 'Browse'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={s.filterLabel}>WEEK · {year}</Text>
+          <View style={s.weekNav}>
+            <TouchableOpacity onPress={() => stepWeek(-1)} style={s.weekNavArrow} hitSlop={8}>
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+            </TouchableOpacity>
+            <View style={s.weekNavLabelWrap}>
+              <Text style={s.weekNavLabel}>{weekFilter === 'all' ? 'All weeks' : `Week ${weekFilter}`}</Text>
+              {weekFilter === currentWeek ? <Pill value="NOW" tone="success" /> : null}
+            </View>
+            <TouchableOpacity onPress={() => stepWeek(1)} style={s.weekNavArrow} hitSlop={8}>
+              <Ionicons name="chevron-forward" size={18} color={colors.text} />
+            </TouchableOpacity>
+            {screenMode === 'browse' ? (
+              <TouchableOpacity onPress={() => setWeekFilter((w) => (w === 'all' ? currentWeek : 'all'))} style={s.weekNavToggle}>
+                <Text style={s.weekNavToggleText}>{weekFilter === 'all' ? 'Just this week' : 'All weeks'}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {screenMode === 'thisWeek' ? (
+            <TouchableOpacity style={s.toggleRow} onPress={() => setOffBudgetOnly(!offBudgetOnly)}>
+              <Text style={s.toggleLabel}>Off-budget only</Text>
+              <View style={[s.switchTrack, offBudgetOnly && s.switchTrackOn]}>
+                <View style={[s.switchThumb, offBudgetOnly && s.switchThumbOn]} />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <Text style={s.filterLabel}>BROWSE MODE</Text>
+              <View style={s.segmented}>
+                {(['edit', 'compare'] as ViewMode[]).map((m) => (
+                  <TouchableOpacity key={m} style={[s.segItem, viewMode === m && s.segItemActive]} onPress={() => setViewMode(m)}>
+                    <Text style={[s.segText, viewMode === m && s.segTextActive]}>{m === 'edit' ? 'Edit' : 'Compare'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function MenuSheet({
+  visible,
+  onClose,
+  onRefresh,
+  onGoToLastWeek,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  onGoToLastWeek: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[s.modalSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <TouchableOpacity style={s.menuItem} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={18} color={colors.text} />
+            <Text style={s.menuItemText}>Refresh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.menuItem} onPress={onGoToLastWeek}>
+            <Ionicons name="time-outline" size={18} color={colors.text} />
+            <Text style={s.menuItemText}>Review last week's variance</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -547,60 +616,23 @@ function Metric({
 const s = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl },
 
-  modeBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  yearText: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary },
-  yearStrong: { fontFamily: fontFamily.semiBold, color: colors.text },
-  segmented: {
-    flexDirection: 'row', backgroundColor: colors.surfaceAlt,
-    borderRadius: borderRadius.full, padding: 2,
-  },
-  segItem: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.full },
-  segItemActive: { backgroundColor: colors.primary },
-  segText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
-  segTextActive: { color: colors.textOnPrimary },
-
-  weekNav: {
+  topBar: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
   },
-  weekNavArrow: {
-    width: 32, height: 32, borderRadius: borderRadius.md,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-  },
-  weekNavLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, justifyContent: 'center' },
-  weekNavLabel: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
-  weekNavToggle: {
-    marginLeft: 'auto', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full, backgroundColor: colors.surfaceAlt,
-  },
-  weekNavToggleText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
-
-  browseSegRow: { flexDirection: 'row', marginBottom: spacing.md },
-
-  summary: {
-    flexDirection: 'row', alignItems: 'baseline', gap: 6,
-    backgroundColor: colors.surface, borderRadius: borderRadius.lg,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-    paddingVertical: spacing.md, paddingHorizontal: spacing.lg, marginBottom: spacing.md,
-    ...shadow.sm,
-  },
-  summaryValue: { fontFamily: fontFamily.bold, fontSize: fontSize.lg, color: colors.text },
-  summaryLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
-
   searchWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.surface, borderRadius: borderRadius.md,
-    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
-    paddingHorizontal: spacing.md, marginBottom: spacing.md,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.surfaceAlt, borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md, height: 38,
   },
-  searchIcon: { marginRight: spacing.sm },
-  searchInput: {
-    flex: 1, fontFamily: fontFamily.regular, fontSize: fontSize.sm,
-    color: colors.text, paddingVertical: spacing.sm,
+  searchInput: { flex: 1, fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.text },
+  iconBtn: {
+    width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  iconBtnDot: {
+    position: 'absolute', top: 7, right: 7, width: 7, height: 7, borderRadius: 4,
+    backgroundColor: colors.primary,
   },
 
   ghCard: {
@@ -613,8 +645,7 @@ const s = StyleSheet.create({
   ghMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },
   ghBody: {
     paddingHorizontal: spacing.md, paddingBottom: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
-    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: spacing.sm,
   },
 
   varietyChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
@@ -641,10 +672,7 @@ const s = StyleSheet.create({
   totalLabel: { fontFamily: fontFamily.medium, fontSize: 10, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
   totalValue: { fontFamily: fontFamily.bold, fontSize: fontSize.lg, color: colors.text, marginTop: 2 },
 
-  varianceCard: {
-    marginTop: spacing.md, padding: spacing.md, borderRadius: borderRadius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+  varianceCard: { marginTop: spacing.md, padding: spacing.md, borderRadius: borderRadius.md, backgroundColor: colors.surfaceAlt },
   varianceHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   varianceTitle: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
   muted: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted },
@@ -652,14 +680,10 @@ const s = StyleSheet.create({
   textarea: {
     fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.text,
     backgroundColor: colors.background, borderRadius: borderRadius.sm,
-    borderWidth: 1, borderColor: colors.border, padding: spacing.md,
-    minHeight: 80, textAlignVertical: 'top',
+    borderWidth: 1, borderColor: colors.border, padding: spacing.md, minHeight: 80, textAlignVertical: 'top',
   },
 
-  weeksTitle: {
-    fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text,
-    marginTop: spacing.lg, marginBottom: spacing.xs,
-  },
+  weeksTitle: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.xs },
   weekRow: { paddingVertical: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
   weekRowCurrent: { backgroundColor: '#F0F9FF' },
   weekHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -689,8 +713,48 @@ const s = StyleSheet.create({
   },
   saveBtnText: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.textOnPrimary },
 
-  emptyText: {
-    fontFamily: fontFamily.regular, fontSize: fontSize.sm,
-    color: colors.textMuted, paddingVertical: spacing.lg, textAlign: 'center',
+  emptyText: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textMuted, paddingVertical: spacing.lg, textAlign: 'center' },
+
+  // Filter / menu sheets
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: spacing.lg, paddingTop: spacing.lg,
   },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  modalTitle: { fontFamily: fontFamily.bold, fontSize: fontSize.lg, color: colors.text },
+  modalCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
+
+  filterLabel: {
+    fontFamily: fontFamily.semiBold, fontSize: 10, color: colors.textMuted,
+    letterSpacing: 1.2, marginTop: spacing.lg, marginBottom: spacing.sm,
+  },
+  segmented: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: borderRadius.full, padding: 2 },
+  segItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.full },
+  segItemActive: { backgroundColor: colors.primary },
+  segText: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textSecondary },
+  segTextActive: { color: colors.textOnPrimary },
+
+  weekNav: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  weekNavArrow: {
+    width: 34, height: 34, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  weekNavLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, justifyContent: 'center' },
+  weekNavLabel: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
+  weekNavToggle: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.full, backgroundColor: colors.surfaceAlt },
+  weekNavToggleText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
+
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: spacing.lg, paddingVertical: spacing.xs,
+  },
+  toggleLabel: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.text },
+  switchTrack: { width: 40, height: 24, borderRadius: 12, backgroundColor: colors.border, padding: 2, justifyContent: 'center' },
+  switchTrackOn: { backgroundColor: colors.primary },
+  switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.surface },
+  switchThumbOn: { alignSelf: 'flex-end' },
+
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  menuItemText: { fontFamily: fontFamily.medium, fontSize: fontSize.md, color: colors.text },
 });

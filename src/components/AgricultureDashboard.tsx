@@ -1,12 +1,20 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useDashboardStore } from '@/src/stores/dashboardStore';
 import { useNetworkStore } from '@/src/stores/networkStore';
 import { AgricultureDashboardSkeleton } from '@/src/components/Skeleton';
-import type { DashboardGreenhouse } from '@/src/services/dashboard';
+import { dashboardApi, type DashboardGreenhouse, type GreenhouseVarietyRow } from '@/src/services/dashboard';
+
+function formatAging(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
 
 /**
  * Home-tab dashboard — today's harvested-vs-received picture, styled to the
@@ -73,6 +81,7 @@ export function AgricultureDashboard() {
 
   const fade = useRef(new Animated.Value(0)).current;
   const showSkeleton = loading && !data;
+  const [missingFor, setMissingFor] = useState<{ ghLabel: string; row: GreenhouseVarietyRow } | null>(null);
 
   useEffect(() => {
     if (showSkeleton) {
@@ -123,7 +132,9 @@ export function AgricultureDashboard() {
       <Pressable style={s.hero} onPress={() => router.push('/reports/production' as any)}>
         <View style={s.heroBubble} />
         <Text style={s.heroChip}>HARVESTED TODAY</Text>
-        <Text style={s.heroNumber}>{(kpi?.harvested ?? 0).toLocaleString()}</Text>
+        <Text style={s.heroNumber} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+          {(kpi?.harvested ?? 0).toLocaleString()}
+        </Text>
         <Text style={s.heroUnit}>stems · {greenhouseCount} {greenhouseCount === 1 ? 'greenhouse' : 'greenhouses'} picked</Text>
         <Ionicons name="leaf" size={72} color="rgba(255,255,255,0.06)" style={s.heroIcon} />
       </Pressable>
@@ -132,12 +143,16 @@ export function AgricultureDashboard() {
       <View style={s.row}>
         <View style={[s.tile, { backgroundColor: DARK_RECEIVED }]}>
           <Text style={s.tileChip}>RECEIVED</Text>
-          <Text style={s.tileNumber}>{(kpi?.received ?? 0).toLocaleString()}</Text>
+          <Text style={s.tileNumber} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+            {(kpi?.received ?? 0).toLocaleString()}
+          </Text>
           <Text style={s.tileUnit}>stems</Text>
         </View>
         <View style={[s.tile, { backgroundColor: DARK_GOOD }]}>
           <Text style={s.tileChip}>GOOD STEMS</Text>
-          <Text style={s.tileNumber}>{(kpi?.goodStems ?? 0).toLocaleString()}</Text>
+          <Text style={s.tileNumber} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+            {(kpi?.goodStems ?? 0).toLocaleString()}
+          </Text>
           <Text style={s.tileUnit}>stems</Text>
         </View>
       </View>
@@ -146,7 +161,12 @@ export function AgricultureDashboard() {
       <View style={[s.rejectTile, hasRejects && s.rejectTileActive]}>
         <View style={s.rejectTileLeft}>
           <Text style={[s.tileChip, hasRejects && { color: '#FECACA' }]}>REJECTS</Text>
-          <Text style={[s.rejectNumber, hasRejects ? { color: '#FCA5A5' } : { color: colors.textMuted }]}>
+          <Text
+            style={[s.rejectNumber, hasRejects ? { color: '#FCA5A5' } : { color: colors.textMuted }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
             {rejects.toLocaleString()}
           </Text>
           <Text style={[s.tileUnit, hasRejects && { color: '#FCA5A5' }]}>stems today</Text>
@@ -181,19 +201,28 @@ export function AgricultureDashboard() {
         <View style={s.varianceBody}>
           <View style={s.varianceStat}>
             <Text style={s.varianceStatLabel}>Harvested</Text>
-            <Text style={s.varianceStatNum}>{(kpi?.harvested ?? 0).toLocaleString()}</Text>
+            <Text style={s.varianceStatNum} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {(kpi?.harvested ?? 0).toLocaleString()}
+            </Text>
             <Text style={s.varianceStatUnit}>stems</Text>
           </View>
           <View style={s.varianceDivider} />
           <View style={s.varianceStat}>
             <Text style={s.varianceStatLabel}>Received</Text>
-            <Text style={s.varianceStatNum}>{(kpi?.received ?? 0).toLocaleString()}</Text>
+            <Text style={s.varianceStatNum} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {(kpi?.received ?? 0).toLocaleString()}
+            </Text>
             <Text style={s.varianceStatUnit}>stems</Text>
           </View>
           <View style={s.varianceDivider} />
           <View style={s.varianceStat}>
             <Text style={s.varianceStatLabel}>Difference</Text>
-            <Text style={[s.varianceStatNum, difference >= 0 ? s.deltaPos : s.deltaNeg]}>
+            <Text
+              style={[s.varianceStatNum, difference >= 0 ? s.deltaPos : s.deltaNeg]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
               {difference > 0 ? '+' : ''}{difference.toLocaleString()}
             </Text>
             <Text style={[s.varianceStatUnit, difference >= 0 ? s.deltaPos : s.deltaNeg]}>
@@ -229,7 +258,11 @@ export function AgricultureDashboard() {
             <View key={f.farm}>
               {farmGroups.length > 1 ? <Text style={s.farmLabel}>{f.farm}</Text> : null}
               {f.greenhouses.map((g) => (
-                <GreenhouseRow key={g.greenhouse} g={g} />
+                <GreenhouseRow
+                  key={g.greenhouse}
+                  g={g}
+                  onShowMissing={(row) => setMissingFor({ ghLabel: g.greenhouseName, row })}
+                />
               ))}
             </View>
           ))}
@@ -257,42 +290,158 @@ export function AgricultureDashboard() {
           <ActionChip icon="leaf-outline" label="Crop cycle" onPress={() => router.push('/crop-cycle' as any)} />
         </ScrollView>
       </View>
+
+      <MissingBucketsSheet
+        greenhouseLabel={missingFor?.ghLabel ?? ''}
+        row={missingFor?.row ?? null}
+        onClose={() => setMissingFor(null)}
+      />
     </Animated.View>
   );
 }
 
-function GreenhouseRow({ g }: { g: DashboardGreenhouse }) {
+function GreenhouseRow({
+  g,
+  onShowMissing,
+}: {
+  g: DashboardGreenhouse;
+  onShowMissing: (row: GreenhouseVarietyRow) => void;
+}) {
   const ratio = g.harvested > 0 ? Math.min(1, g.received / g.harvested) : 0;
   const ratioPct = Math.round(ratio * 100);
   const complete = g.harvested > 0 && g.received >= g.harvested;
 
+  const [open, setOpen] = useState(false);
+  const [varieties, setVarieties] = useState<GreenhouseVarietyRow[] | null>(null);
+  const [loadingVarieties, setLoadingVarieties] = useState(false);
+
+  const toggle = () => {
+    setOpen((prev) => !prev);
+    if (varieties === null) {
+      setLoadingVarieties(true);
+      dashboardApi
+        .fetchGreenhouseBreakdown(g.greenhouse)
+        .then(setVarieties)
+        .catch(() => setVarieties([]))
+        .finally(() => setLoadingVarieties(false));
+    }
+  };
+
   return (
     <View style={s.ghRowCard}>
-      <View style={s.ghRowMain}>
-        <View style={s.ghRowLeft}>
-          <Text style={s.ghRowName} numberOfLines={1}>{g.greenhouseName}</Text>
-          <View style={s.ghRowMetaLine}>
-            {g.budget > 0 ? <Text style={s.ghRowMeta}>{g.budgetAchievementPct}% of budget</Text> : null}
-            {g.totalRejects > 0 ? (
-              <Text style={s.ghRowRejText}>{g.budget > 0 ? ' · ' : ''}{g.totalRejects.toLocaleString()} rej</Text>
-            ) : null}
+      <Pressable onPress={toggle} style={({ pressed }) => pressed && { opacity: 0.85 }}>
+        <View style={s.ghRowMain}>
+          <View style={s.ghRowLeft}>
+            <Text style={s.ghRowName} numberOfLines={1}>{g.greenhouseName}</Text>
+            <View style={s.ghRowMetaLine}>
+              {g.budget > 0 ? <Text style={s.ghRowMeta}>{g.budgetAchievementPct}% of budget</Text> : null}
+              {g.totalRejects > 0 ? (
+                <Text style={s.ghRowRejText}>{g.budget > 0 ? ' · ' : ''}{g.totalRejects.toLocaleString()} rej</Text>
+              ) : null}
+            </View>
           </View>
-        </View>
-        <View style={s.ghRowRight}>
-          <View style={s.ghRowPair}>
-            <Text style={s.ghRowNum}>{g.harvested.toLocaleString()}</Text>
-            <Text style={s.ghRowArrow}>→</Text>
-            <Text style={[s.ghRowNum, g.received === 0 && s.ghRowNumMuted, complete && s.ghRowNumGood]}>
-              {g.received.toLocaleString()}
-            </Text>
+          <View style={s.ghRowRight}>
+            <View style={s.ghRowPair}>
+              <Text style={s.ghRowNum} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {g.harvested.toLocaleString()}
+              </Text>
+              <Text style={s.ghRowArrow}>→</Text>
+              <Text
+                style={[s.ghRowNum, g.received === 0 && s.ghRowNumMuted, complete && s.ghRowNumGood]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {g.received.toLocaleString()}
+              </Text>
+            </View>
+            <Text style={s.ghRowRatio}>{g.harvested > 0 ? `${ratioPct}% received` : '—'}</Text>
           </View>
-          <Text style={s.ghRowRatio}>{g.harvested > 0 ? `${ratioPct}% received` : '—'}</Text>
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} style={{ marginLeft: spacing.sm }} />
         </View>
-      </View>
-      <View style={s.ghRowBarTrack}>
-        <View style={[s.ghRowBarFill, complete && s.ghRowBarFillFull, { width: `${ratioPct}%` }]} />
-      </View>
+        <View style={s.ghRowBarTrack}>
+          <View style={[s.ghRowBarFill, complete && s.ghRowBarFillFull, { width: `${ratioPct}%` }]} />
+        </View>
+      </Pressable>
+
+      {open ? (
+        loadingVarieties ? (
+          <View style={s.varietyLoading}>
+            <ActivityIndicator size="small" color={colors.textMuted} />
+          </View>
+        ) : varieties && varieties.length > 0 ? (
+          <View style={s.varietyList}>
+            {varieties.map((v) => {
+              const hasMissing = v.missingBuckets.length > 0;
+              return (
+                <Pressable
+                  key={v.variety}
+                  style={({ pressed }) => [s.varietyRow, pressed && hasMissing && { opacity: 0.6 }]}
+                  disabled={!hasMissing}
+                  delayLongPress={400}
+                  onLongPress={() => hasMissing && onShowMissing(v)}
+                >
+                  <Text style={s.varietyRowName} numberOfLines={1}>{v.variety}</Text>
+                  <View style={s.varietyRowPair}>
+                    <Text style={s.varietyRowNum}>{v.harvested.toLocaleString()}</Text>
+                    <Text style={s.ghRowArrow}>→</Text>
+                    <Text style={[s.varietyRowNum, v.received === 0 && s.ghRowNumMuted]}>
+                      {v.received.toLocaleString()}
+                    </Text>
+                    {hasMissing ? <Text style={s.varietyRowWarn}>({v.variance.toLocaleString()})</Text> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={s.varietyEmpty}>No variety detail for today.</Text>
+        )
+      ) : null}
     </View>
+  );
+}
+
+function MissingBucketsSheet({
+  greenhouseLabel,
+  row,
+  onClose,
+}: {
+  greenhouseLabel: string;
+  row: GreenhouseVarietyRow | null;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  if (!row) return null;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={s.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[s.modalSheet, { paddingBottom: insets.bottom + spacing.md }]}>
+          <View style={s.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.modalTitle}>Missing buckets</Text>
+              <Text style={s.modalSubtitle} numberOfLines={1}>{greenhouseLabel} · {row.variety}</Text>
+            </View>
+            <Pressable onPress={onClose} style={s.modalCloseBtn} hitSlop={8}>
+              <Ionicons name="close" size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+          {row.missingBuckets.length === 0 ? (
+            <Text style={s.varietyEmpty}>Fully reconciled — nothing missing.</Text>
+          ) : (
+            row.missingBuckets.map((b) => (
+              <View key={b.bucketId} style={s.missingRow}>
+                <Text style={s.missingBucketId} numberOfLines={1}>{b.bucketId}</Text>
+                <Text style={s.missingQty}>{b.variance.toLocaleString()} stems</Text>
+                <Text style={s.missingAging}>{formatAging(b.agingMinutes)}</Text>
+              </View>
+            ))
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -458,6 +607,44 @@ const s = StyleSheet.create({
   ghRowBarTrack: { height: 3, backgroundColor: colors.background, marginHorizontal: -spacing.md },
   ghRowBarFill: { height: '100%', backgroundColor: '#22C55E' },
   ghRowBarFillFull: { backgroundColor: '#15803D' },
+
+  varietyLoading: { paddingVertical: spacing.md, alignItems: 'center' },
+  varietyList: { paddingTop: spacing.xs, paddingBottom: spacing.sm },
+  varietyRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: spacing.xs + 2,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
+  },
+  varietyRowName: { flex: 1, fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textSecondary },
+  varietyRowPair: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  varietyRowNum: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.text },
+  varietyRowWarn: { fontFamily: fontFamily.medium, fontSize: 10, color: '#DC2626', marginLeft: 2 },
+  varietyEmpty: {
+    fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted,
+    paddingVertical: spacing.sm,
+  },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: spacing.lg, paddingTop: spacing.lg, maxHeight: '80%',
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  modalTitle: { fontFamily: fontFamily.bold, fontSize: fontSize.lg, color: colors.text },
+  modalSubtitle: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
+  modalCloseBtn: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  missingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
+  },
+  missingBucketId: { flex: 1, fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
+  missingQty: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: '#DC2626' },
+  missingAging: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted, minWidth: 48, textAlign: 'right' },
 
   emptyCard: {
     alignItems: 'center', backgroundColor: colors.surface, borderRadius: 20,
