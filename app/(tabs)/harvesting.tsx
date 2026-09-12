@@ -326,7 +326,12 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
       <LabeledInput
         label="Number of stems"
         value={quantity}
-        onChangeText={setQuantity}
+        // Strip anything but digits as it's typed -- a stray comma (e.g. from
+        // a paste, or a keyboard that allows one despite number-pad) must
+        // never reach state as text. This is a whole-stems count compared
+        // against a per-bucket limit server-side; "100,200" left as a
+        // string there throws instead of comparing, so block it here.
+        onChangeText={(t) => setQuantity(t.replace(/[^0-9]/g, ''))}
         placeholder="e.g. 100"
         keyboardType="number-pad"
         iconLeft="leaf-outline"
