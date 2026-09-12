@@ -338,15 +338,27 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
   );
 }
 
-/* ─── Sprays: grading flow (bucket → grader → bunch → auto-validate+submit) ──── */
+/* ─── Sprays: grading flow (bucket → harvester + length → bunch → auto-validate+submit) ──── */
 
 function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) {
   const { showSuccess, showError } = useToast();
   const acting = useGradingStore((s) => s.acting);
   const validateAndGrade = useGradingStore((s) => s.validateAndGrade);
 
+  // Same greenhouse-scoped employees + global stem-length list the Harvest
+  // (Standards) form uses — reused as-is, not a second copy. loadGreenhouseData
+  // is cached per greenhouse (see harvestingStore), so this is a no-op if the
+  // Standards tab already loaded this same greenhouse.
+  const stemLengths = useHarvestingStore((s) => s.stemLengths);
+  const stemLengthsLoading = useHarvestingStore((s) => s.stemLengthsLoading);
+  const employees = useHarvestingStore((s) => s.employees);
+  const ghDataLoading = useHarvestingStore((s) => s.ghDataLoading);
+  const loadStemLengths = useHarvestingStore((s) => s.loadStemLengths);
+  const loadGreenhouseData = useHarvestingStore((s) => s.loadGreenhouseData);
+
   const [bucketRaw, setBucketRaw] = useState('');
-  const [graderRaw, setGraderRaw] = useState('');
+  const [harvester, setHarvester] = useState('');
+  const [stemLength, setStemLength] = useState('');
   const [bunchRaw, setBunchRaw] = useState('');
   /** Number of bunches successfully graded against the current bucket. Resets
    *  whenever the bucket changes (manual clear or new scan). */
@@ -356,11 +368,21 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
   const [contentsTotal, setContentsTotal] = useState(0);
 
   const bucketId = parseScanned(bucketRaw, 'bucket');
-  const graderId = parseScanned(graderRaw, 'grader');
   const bunchId = parseScanned(bunchRaw, 'bunch');
 
-  const graderRef = useRef<TextInput>(null);
   const bunchRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    loadStemLengths();
+  }, [loadStemLengths]);
+
+  useEffect(() => {
+    if (greenhouse) loadGreenhouseData(greenhouse);
+    // employees is greenhouse-scoped and gets cleared while it reloads (see
+    // harvestingStore) — a stale harvester name from the previous
+    // greenhouse would silently point at someone not even working here.
+    setHarvester('');
+  }, [greenhouse, loadGreenhouseData]);
 
   // Guards against out-of-order responses: loadContents() is fired-and-
   // forgotten (not awaited) after every grade so scanning the next bunch
@@ -416,8 +438,13 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
       setBunchRaw('');
       return;
     }
-    if (!graderId) {
-      showError('Scan the grader before the bunch.');
+    if (!harvester) {
+      showError('Pick the harvester before scanning bunches.');
+      setBunchRaw('');
+      return;
+    }
+    if (!stemLength) {
+      showError('Pick a stem length before scanning bunches.');
       setBunchRaw('');
       return;
     }
@@ -425,7 +452,8 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
       const outcome = await validateAndGrade({
         farm,
         stock_entry_type: 'Grading',
-        graded_by: graderId,
+        graded_by: harvester,
+        stem_length: stemLength,
         bunch_id: bunchId,
         qty: 1,
         rose_type: 'Spray Roses',
@@ -433,8 +461,9 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
         bucket_id: bucketId,
       });
       if (outcome.ok) {
-        // Bucket + grader are retained — only clear the bunch field so the
-        // next bunch QR scan in this same session goes straight to submit.
+        // Bucket + harvester + length are retained — only clear the bunch
+        // field so the next bunch QR scan in this same session goes
+        // straight to submit.
         setGradedCount((c) => c + 1);
         showSuccess(`Bunch graded. Scan the next bunch for ${bucketId}.`);
         setBunchRaw('');
@@ -450,13 +479,16 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
 
   const clearForm = () => {
     setBucketRaw('');
-    setGraderRaw('');
+    setHarvester('');
+    setStemLength('');
     setBunchRaw('');
     setGradedCount(0);
   };
 
   const canScan = !!farm && !!greenhouse;
-  const sessionActive = !!bucketId && !!graderId;
+  const sessionActive = !!bucketId && !!harvester;
+  const harvesterLabel = employees.find((e) => e.name === harvester)?.label || harvester;
+  const stemLengthLabel = stemLengths.find((l) => l.name === stemLength)?.label || stemLength;
 
   return (
     <>
@@ -470,7 +502,8 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
             <View style={{ flex: 1 }}>
               <Text style={s.sessionLabel}>Active session</Text>
               <Text style={s.sessionValue} numberOfLines={1}>
-                Bucket {bucketId} · Grader {graderId}
+                Bucket {bucketId} · {harvesterLabel}
+                {stemLengthLabel ? ` · ${stemLengthLabel}` : ''}
               </Text>
             </View>
             <View style={s.sessionBadge}>
@@ -507,52 +540,45 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
           icon="cube-outline"
           value={bucketId}
           rawValue={bucketRaw}
-          onChange={(t) => {
-            setBucketRaw(t);
-            const parsed = parseScanned(t, 'bucket');
-            if (parsed && parsed !== t) graderRef.current?.focus();
-          }}
+          onChange={setBucketRaw}
           placeholder="Scan or paste the bucket QR"
           disabled={!canScan}
-          onSubmitEditing={() => graderRef.current?.focus()}
-          onScan={(raw) => {
-            setBucketRaw(raw);
-            const parsed = parseScanned(raw, 'bucket');
-            if (parsed) graderRef.current?.focus();
-          }}
+          onScan={(raw) => setBucketRaw(raw)}
         />
+
+        <View style={{ marginBottom: spacing.md }}>
+          <Dropdown
+            label="Harvester"
+            value={harvester}
+            onChange={setHarvester}
+            options={employees.map((e) => ({ value: e.name, label: e.label }))}
+            placeholder={
+              !canScan ? 'Pick a greenhouse first' : ghDataLoading ? 'Loading…' : 'Pick the harvester'
+            }
+            disabled={!canScan || ghDataLoading}
+          />
+        </View>
+
+        <View style={{ marginBottom: spacing.md }}>
+          <Dropdown
+            label="Stem length"
+            value={stemLength}
+            onChange={setStemLength}
+            options={stemLengths.map((l) => ({ value: l.name, label: l.label }))}
+            placeholder={!canScan ? 'Pick a greenhouse first' : stemLengthsLoading ? 'Loading…' : '62cm'}
+            disabled={!canScan || stemLengthsLoading}
+          />
+        </View>
 
         <ScanStep
           step={2}
-          label="Grader"
-          icon="person-outline"
-          value={graderId}
-          rawValue={graderRaw}
-          onChange={(t) => {
-            setGraderRaw(t);
-            const parsed = parseScanned(t, 'grader');
-            if (parsed && parsed !== t) bunchRef.current?.focus();
-          }}
-          placeholder="Scan or type the grader QR"
-          disabled={!canScan || !bucketId}
-          inputRef={graderRef}
-          onSubmitEditing={() => bunchRef.current?.focus()}
-          onScan={(raw) => {
-            setGraderRaw(raw);
-            const parsed = parseScanned(raw, 'grader');
-            if (parsed) bunchRef.current?.focus();
-          }}
-        />
-
-        <ScanStep
-          step={3}
           label="Bunch"
           icon="flower-outline"
           value={bunchId}
           rawValue={bunchRaw}
           onChange={setBunchRaw}
           placeholder="Scan or paste the bunch QR — auto-submits"
-          disabled={!canScan || !bucketId || !graderId}
+          disabled={!canScan || !bucketId || !harvester || !stemLength}
           inputRef={bunchRef}
           onScan={(raw) => setBunchRaw(raw)}
         />
@@ -569,7 +595,7 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
           variant="outline"
           iconLeft="refresh"
           onPress={clearForm}
-          disabled={acting || (!bucketRaw && !graderRaw && !bunchRaw)}
+          disabled={acting || (!bucketRaw && !harvester && !stemLength && !bunchRaw)}
         />
       </Card>
     </>
