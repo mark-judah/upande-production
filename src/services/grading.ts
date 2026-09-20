@@ -34,6 +34,10 @@ export interface GradingPayload {
   rose_type: RoseType;
   source_warehouse: string;
   bucket_id: string;
+  /** Picked from a dropdown at grading time — the backend uses this instead
+   *  of trusting whatever stem_length is baked into the Bunch QR Code
+   *  record, which doesn't reliably reflect what's actually in the bucket. */
+  stem_length: string;
 }
 
 interface RawBunchResp {

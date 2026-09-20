@@ -207,4 +207,64 @@ export const dashboardApi = {
       },
     };
   },
+
+  /** Per-variety harvested/received + missing-bucket detail for one greenhouse, one date. */
+  async fetchGreenhouseBreakdown(greenhouse: string, date?: string): Promise<GreenhouseVarietyRow[]> {
+    const body = await api<RawGreenhouseBreakdown>({
+      method: 'POST',
+      url: '/api/method/upande_agriculture.mobile.api.productionGreenhouseVarietyBreakdown',
+      data: { greenhouse, date: date ?? new Date().toISOString().slice(0, 10) },
+    });
+    const d = body.data ?? {};
+    return (d.varieties ?? []).map((v) => ({
+      variety: String(v.variety ?? ''),
+      harvested: n(v.harvested),
+      received: n(v.received),
+      variance: n(v.variance),
+      missingBuckets: (v.missing_buckets ?? []).map((b) => ({
+        bucketId: String(b.bucket_id ?? ''),
+        harvestedQty: n(b.harvested_qty),
+        receivedQty: n(b.received_qty),
+        variance: n(b.variance),
+        agingMinutes: n(b.aging_minutes),
+      })),
+    }));
+  },
 };
+
+export interface MissingBucket {
+  bucketId: string;
+  harvestedQty: number;
+  receivedQty: number;
+  variance: number;
+  agingMinutes: number;
+}
+
+export interface GreenhouseVarietyRow {
+  variety: string;
+  harvested: number;
+  received: number;
+  variance: number;
+  missingBuckets: MissingBucket[];
+}
+
+interface RawGreenhouseBreakdown {
+  data?: {
+    date?: string;
+    greenhouse?: string;
+    varieties?: Array<{
+      variety?: string;
+      harvested?: number;
+      received?: number;
+      variance?: number;
+      missing_buckets?: Array<{
+        bucket_id?: string;
+        harvested_qty?: number;
+        received_qty?: number;
+        variance?: number;
+        aging_minutes?: number;
+      }>;
+    }>;
+    error?: string;
+  };
+}

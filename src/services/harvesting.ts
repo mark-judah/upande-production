@@ -44,7 +44,7 @@ export interface HarvestOutcome {
 interface RawGreenhouseData {
   data?: {
     varieties?: Array<{ variety?: string; area?: number; item_group?: string; is_spray_rose?: boolean }>;
-    employees?: Array<{ employee_name?: string }>;
+    employees?: Array<{ name?: string; employee_name?: string }>;
     cut_stages?: string[];
     notice?: string | null;
     error?: string;
@@ -70,9 +70,13 @@ export const harvestingApi = {
       itemGroup: v.item_group ? String(v.item_group) : undefined,
       isSprayRose: !!v.is_spray_rose,
     }));
+    // name must be the actual Employee id (custom_harvester/graded_by are
+    // Link(Employee) fields elsewhere) -- it was employee_name here, which
+    // made every harvest/grading submission fail Link validation server-side
+    // unless an employee's full name happened to collide with someone's id.
     const employees = (body.data?.employees ?? []).map<EmployeeOption>((e) => ({
-      name: String(e.employee_name ?? ''),
-      label: String(e.employee_name ?? ''),
+      name: String(e.name ?? ''),
+      label: String(e.employee_name ?? e.name ?? ''),
     }));
     const cutStages = (body.data?.cut_stages ?? []).map((c) => String(c)).filter(Boolean);
     return { varieties, employees, cutStages, notice: body.data?.notice ?? null };
