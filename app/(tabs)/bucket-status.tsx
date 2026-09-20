@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Alert } from '@/src/components/Card';
@@ -29,6 +29,7 @@ export default function BucketStatusScreen() {
   const [raw, setRaw] = useState('');
   const [bucketId, setBucketId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [result, setResult] = useState<BucketStatus | null>(null);
 
   // Only one row's editor is ever open at a time, so a flat index (rather
@@ -71,6 +72,18 @@ export default function BucketStatusScreen() {
     loadStatus(bucketId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bucketId]);
+
+  // Re-runs the current lookup. Nothing to refresh until a bucket has been
+  // looked up at least once.
+  const onRefresh = async () => {
+    if (!bucketId) return;
+    setRefreshing(true);
+    try {
+      await loadStatus(bucketId);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const fmt = (n: number) => n.toLocaleString();
 
@@ -125,7 +138,11 @@ export default function BucketStatusScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={s.scroll}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={s.scroll}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       <Card>
         <LabeledInput
           label="Bucket"

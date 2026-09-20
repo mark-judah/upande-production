@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,10 +46,20 @@ export default function NewCropCycleScreen() {
   const [plantsPerSqm, setPlantsPerSqm] = useState('');
   const [grossArea, setGrossArea] = useState('');
   const [beds, setBeds] = useState<BedRow[]>([emptyBed()]);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadPickers();
   }, [loadPickers]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await loadPickers();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const ghOptions: DropdownOption[] = useMemo(
     () => greenhouses.map((g) => ({ label: g.label, value: g.name, sublabel: g.farm })),
@@ -125,6 +135,7 @@ export default function NewCropCycleScreen() {
         showsVerticalScrollIndicator={false}
         enableOnAndroid
         extraScrollHeight={40}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Card title="Greenhouse">
           <Dropdown

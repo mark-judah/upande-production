@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,9 +30,13 @@ export default function ProductionReportScreen() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<'harvested' | 'received'>('harvested');
   const [groupBy, setGroupBy] = useState<'farm' | 'greenhouse'>('farm');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadFarms = () => cropCycleApi.listFarms().then(setFarms).catch(() => {});
 
   useEffect(() => {
-    cropCycleApi.listFarms().then(setFarms).catch(() => {});
+    loadFarms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     load();
@@ -40,6 +44,15 @@ export default function ProductionReportScreen() {
   useEffect(() => {
     if (error) showError(error);
   }, [error, showError]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadFarms(), load()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const toggle = (key: string) =>
     setCollapsed((prev) => {
@@ -75,7 +88,10 @@ export default function ProductionReportScreen() {
         <View style={s.headerBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <Card>
           <DateSelector value={date} onChange={setDate} label="Harvest date" />
           <Dropdown

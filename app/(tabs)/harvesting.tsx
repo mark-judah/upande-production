@@ -16,7 +16,7 @@ import { useRefreshOnFocus } from '@/src/hooks/useRefreshOnFocus';
 import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import { useHarvestingStore } from '@/src/stores/harvestingStore';
 import { useGradingStore } from '@/src/stores/gradingStore';
-import { parseScanned, gradingApi, type BucketContentRow } from '@/src/services/grading';
+import { parseScanned, isValidScan, gradingApi, type BucketContentRow } from '@/src/services/grading';
 
 function openScanner(onScan: (code: string) => void) {
   setCameraResultCallback(onScan);
@@ -317,9 +317,16 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
         placeholder="Scan or type the bucket QR"
         iconLeft="qr-code-outline"
         autoCapitalize="none"
+        showSoftInputOnFocus={false}
         trailingIcon="scan-outline"
         onPressTrailing={() =>
-          openScanner((raw) => setBucketId(parseScanned(raw, 'bucket') || raw))
+          openScanner((raw) => {
+            if (!isValidScan(raw, 'bucket')) {
+              showError('Please scan a valid bucket QR code.');
+              return;
+            }
+            setBucketId(parseScanned(raw, 'bucket'));
+          })
         }
       />
 
@@ -516,9 +523,12 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
           disabled={!canScan}
           onSubmitEditing={() => graderRef.current?.focus()}
           onScan={(raw) => {
+            if (!isValidScan(raw, 'bucket')) {
+              showError('Please scan a valid bucket QR code.');
+              return;
+            }
             setBucketRaw(raw);
-            const parsed = parseScanned(raw, 'bucket');
-            if (parsed) graderRef.current?.focus();
+            graderRef.current?.focus();
           }}
         />
 
@@ -538,9 +548,12 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
           inputRef={graderRef}
           onSubmitEditing={() => bunchRef.current?.focus()}
           onScan={(raw) => {
+            if (!isValidScan(raw, 'grader')) {
+              showError('Please scan a valid grader QR code.');
+              return;
+            }
             setGraderRaw(raw);
-            const parsed = parseScanned(raw, 'grader');
-            if (parsed) bunchRef.current?.focus();
+            bunchRef.current?.focus();
           }}
         />
 
@@ -554,7 +567,13 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
           placeholder="Scan or paste the bunch QR — auto-submits"
           disabled={!canScan || !bucketId || !graderId}
           inputRef={bunchRef}
-          onScan={(raw) => setBunchRaw(raw)}
+          onScan={(raw) => {
+            if (!isValidScan(raw, 'bunch')) {
+              showError('Please scan a valid bunch QR code.');
+              return;
+            }
+            setBunchRaw(raw);
+          }}
         />
 
         {acting ? (
@@ -629,6 +648,7 @@ function ScanStep({
         autoCapitalize="none"
         autoCorrect={false}
         editable={!disabled}
+        showSoftInputOnFocus={false}
         ref={inputRef}
         onSubmitEditing={onSubmitEditing}
         returnKeyType="next"

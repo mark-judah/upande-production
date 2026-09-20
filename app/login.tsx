@@ -91,7 +91,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         enableOnAndroid
-        extraScrollHeight={20}
+        extraScrollHeight={40}
       >
           <View style={s.hero}>
             <View style={s.logoCircle}>
@@ -217,7 +217,11 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xxl, flexGrow: 1, justifyContent: 'center' },
+  // No justifyContent: 'center' here -- centering a flexGrow container fights
+  // KeyboardAwareScrollView's scroll-to-focused-input math and was leaving the
+  // password field / Sign in button hidden behind the keyboard. Padding keeps
+  // the form comfortably placed instead.
+  scroll: { padding: spacing.lg, paddingTop: spacing.xxl, paddingBottom: spacing.xxl, flexGrow: 1 },
   hero: { alignItems: 'center', marginBottom: spacing.xl },
   logoCircle: {
     width: 80,

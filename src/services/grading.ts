@@ -103,6 +103,31 @@ export function parseScanned(raw: string, kind: 'bucket' | 'grader' | 'bunch'): 
   return trimmed;
 }
 
+/**
+ * True when raw scanned text is a genuine bucket/grader/bunch QR — i.e. it
+ * matches the JSON shape printed on that label type (see
+ * upande_packhouse/server_scripts/gen_label_id.py):
+ *   bucket: {"BUCKET-<n>": "bucket"}   grader: {"grader": "<name>"}
+ *   bunch:  {"bunch_id": "BUNCH-<n>"}
+ * Free-typed IDs (not JSON) are a separate, trusted input path and are not
+ * checked here — this only guards the camera scan result.
+ */
+export function isValidScan(raw: string, kind: 'bucket' | 'grader' | 'bunch'): boolean {
+  const trimmed = (raw || '').trim();
+  if (!trimmed.startsWith('{')) return false;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object') return false;
+    const obj = parsed as Record<string, unknown>;
+    if (kind === 'bucket') return Object.values(obj).some((v) => v === 'bucket');
+    if (kind === 'grader') return typeof obj.grader === 'string' && obj.grader.length > 0;
+    if (kind === 'bunch') return typeof obj.bunch_id === 'string' && obj.bunch_id.length > 0;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export const gradingApi = {
   /**
    * Validates a bunch QR before grading it: returns the bunch's current
