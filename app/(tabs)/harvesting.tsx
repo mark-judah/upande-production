@@ -350,7 +350,7 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
   );
 }
 
-/* ─── Sprays: grading flow (bucket → harvester → bunch → auto-validate+submit) ──── */
+/* ─── Sprays: grading flow (harvester → bucket → bunch → auto-validate+submit) ──── */
 
 function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) {
   const { showSuccess, showError } = useToast();
@@ -531,24 +531,6 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
           </View>
         ) : null}
 
-        <ScanStep
-          step={1}
-          label="Bucket"
-          icon="cube-outline"
-          value={bucketId}
-          rawValue={bucketRaw}
-          onChange={setBucketRaw}
-          placeholder="Scan or paste the bucket QR"
-          disabled={!canScan}
-          onScan={(raw) => {
-            if (!isValidScan(raw, 'bucket')) {
-              showError('Please scan a valid bucket QR code.');
-              return;
-            }
-            setBucketRaw(raw);
-          }}
-        />
-
         <View style={{ marginBottom: spacing.md }}>
           <Dropdown
             label="Harvester"
@@ -561,6 +543,24 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
             disabled={!canScan || ghDataLoading}
           />
         </View>
+
+        <ScanStep
+          step={1}
+          label="Bucket"
+          icon="cube-outline"
+          value={bucketId}
+          rawValue={bucketRaw}
+          onChange={setBucketRaw}
+          placeholder="Scan or paste the bucket QR"
+          disabled={!canScan || !harvester}
+          onScan={(raw) => {
+            if (!isValidScan(raw, 'bucket')) {
+              showError('Please scan a valid bucket QR code.');
+              return;
+            }
+            setBucketRaw(raw);
+          }}
+        />
 
         <ScanStep
           step={2}
