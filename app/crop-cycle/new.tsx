@@ -8,27 +8,32 @@ import { Card } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { Dropdown, type DropdownOption } from '@/src/components/Dropdown';
 import { LabeledInput } from '@/src/components/LabeledInput';
+import { DateField } from '@/src/components/DateField';
 import { useToast } from '@/src/components/Toast';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import { type BedConfigInput } from '@/src/services/crop-cycle';
 
+function todayIso(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 interface BedRow {
   fromBed: string;
   toBed: string;
+  plants: string;
   variety: string;
-  length: string;
-  width: string;
-  plantingDate: string;
 }
 
 const emptyBed = (): BedRow => ({
   fromBed: '',
   toBed: '',
+  plants: '',
   variety: '',
-  length: '',
-  width: '',
-  plantingDate: '',
 });
 
 export default function NewCropCycleScreen() {
@@ -44,8 +49,8 @@ export default function NewCropCycleScreen() {
 
   const [greenhouse, setGreenhouse] = useState(prefillGreenhouse);
   const [plantsPerSqm, setPlantsPerSqm] = useState('');
-  const [grossArea, setGrossArea] = useState('');
   const [beds, setBeds] = useState<BedRow[]>([emptyBed()]);
+  const [plantingDate, setPlantingDate] = useState(todayIso());
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -64,11 +69,6 @@ export default function NewCropCycleScreen() {
   const ghOptions: DropdownOption[] = useMemo(
     () => greenhouses.map((g) => ({ label: g.label, value: g.name, sublabel: g.farm })),
     [greenhouses],
-  );
-  // Farm is a Crop Cycle field; derive it from the chosen greenhouse's picker.
-  const farm = useMemo(
-    () => greenhouses.find((g) => g.name === greenhouse)?.farm ?? '',
-    [greenhouses, greenhouse],
   );
   const varietyOptions: DropdownOption[] = useMemo(
     () => varieties.map((v) => ({ label: v.label, value: v.name })),
@@ -93,10 +93,8 @@ export default function NewCropCycleScreen() {
       .map((b) => ({
         from_bed: num(b.fromBed),
         to_bed: num(b.toBed),
+        qty_planted: num(b.plants),
         variety: b.variety,
-        bed_length: num(b.length),
-        bed_width: num(b.width),
-        planting_date: b.plantingDate || undefined,
       }));
 
     if (bedPayload.length === 0) {
@@ -106,9 +104,8 @@ export default function NewCropCycleScreen() {
 
     const r = await createCycle({
       greenhouse,
-      farm: farm || undefined,
       plants_per_sqm: plantsPerSqm ? num(plantsPerSqm) : undefined,
-      gross_area: grossArea ? num(grossArea) : undefined,
+      planting_date: plantingDate,
       bed_config: bedPayload,
     });
     if (r.ok) {
@@ -145,26 +142,13 @@ export default function NewCropCycleScreen() {
             onChange={setGreenhouse}
             placeholder="Select greenhouse…"
           />
-          <View style={s.twoCol}>
-            <View style={s.col}>
-              <LabeledInput
-                label="Plants / m²"
-                value={plantsPerSqm}
-                onChangeText={setPlantsPerSqm}
-                keyboardType="numeric"
-                placeholder="e.g. 7"
-              />
-            </View>
-            <View style={s.col}>
-              <LabeledInput
-                label="Gross area m²"
-                value={grossArea}
-                onChangeText={setGrossArea}
-                keyboardType="numeric"
-                placeholder="e.g. 7315"
-              />
-            </View>
-          </View>
+          <LabeledInput
+            label="Plants / m²"
+            value={plantsPerSqm}
+            onChangeText={setPlantsPerSqm}
+            keyboardType="numeric"
+            placeholder="e.g. 7"
+          />
         </Card>
 
         <Card title="Bed configuration">
@@ -186,6 +170,13 @@ export default function NewCropCycleScreen() {
                   <LabeledInput label="To bed" value={b.toBed} onChangeText={(t) => updateBed(i, { toBed: t })} keyboardType="numeric" />
                 </View>
               </View>
+              <LabeledInput
+                label="Number of plants"
+                value={b.plants}
+                onChangeText={(t) => updateBed(i, { plants: t })}
+                keyboardType="numeric"
+                placeholder="e.g. 2000"
+              />
               <Dropdown
                 label="Variety"
                 value={b.variety}
@@ -193,18 +184,13 @@ export default function NewCropCycleScreen() {
                 onChange={(v) => updateBed(i, { variety: v })}
                 placeholder="Select variety…"
               />
-              <View style={s.twoCol}>
-                <View style={s.col}>
-                  <LabeledInput label="Bed length m" value={b.length} onChangeText={(t) => updateBed(i, { length: t })} keyboardType="numeric" />
-                </View>
-                <View style={s.col}>
-                  <LabeledInput label="Bed width m" value={b.width} onChangeText={(t) => updateBed(i, { width: t })} keyboardType="numeric" />
-                </View>
-              </View>
-              <LabeledInput label="Planting date" value={b.plantingDate} onChangeText={(t) => updateBed(i, { plantingDate: t })} placeholder="YYYY-MM-DD (optional)" />
             </View>
           ))}
           <Button label="Add bed range" variant="outline" iconLeft="add" onPress={() => setBeds((p) => [...p, emptyBed()])} />
+        </Card>
+
+        <Card title="Planting date">
+          <DateField label="Planting date" value={plantingDate} onChange={setPlantingDate} />
         </Card>
 
         <Button label="Create crop cycle" onPress={onSubmit} loading={acting} style={{ marginTop: spacing.sm }} />

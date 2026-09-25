@@ -11,7 +11,7 @@ import { useAuthStore } from '@/src/stores/authStore';
 import * as Biometric from '@/src/services/biometric';
 import { colors, fontFamily, fontSize, spacing } from '@/src/theme';
 
-export default function SettingsScreen() {
+export default function SettingsScreen() {  
   const router = useRouter();
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
@@ -21,7 +21,6 @@ export default function SettingsScreen() {
   const logout = useAuthStore((s) => s.logout);
   const forgetDevice = useAuthStore((s) => s.forgetDevice);
   const { showSuccess, showError } = useToast();
-
   const [moduleReady, setModuleReady] = useState(false);
   const [hardwareReady, setHardwareReady] = useState(false);
   const [updatesChecking, setUpdatesChecking] = useState(false);

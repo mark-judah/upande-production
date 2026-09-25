@@ -365,27 +365,22 @@ function NewPlanSheet({ onClose }: { onClose: () => void }) {
   const save = usePlanningStore((st) => st.save);
   const open = usePlanningStore((st) => st.open);
   const greenhouses = useCropCycleStore((st) => st.greenhouses);
-  const varieties = useCropCycleStore((st) => st.varieties);
 
   const now = new Date();
   const [greenhouse, setGreenhouse] = useState('');
-  const [year, setYear] = useState(String(now.getFullYear()));
   const [week, setWeek] = useState(String(getISOWeek(now)));
-  const [variety, setVariety] = useState('');
-  const [plannedStems, setPlannedStems] = useState('');
+  const [task, setTask] = useState('');
 
   const submit = async () => {
-    if (!greenhouse || !year || !week) {
-      showError('Greenhouse, year and week are required.');
+    if (!greenhouse || !week || !task) {
+      showError('Greenhouse, week and task are required.');
       return;
     }
     const outcome = await save({
       greenhouse,
-      plan_year: Number(year),
+      plan_year: now.getFullYear(),
       plan_week: Number(week),
-      varieties: variety && plannedStems
-        ? [{ variety, planned_stems: Number(plannedStems) }]
-        : undefined,
+      tasks: [{ task_name: task, operation: task }],
     });
     if (outcome.ok) {
       showSuccess(outcome.message);
@@ -404,7 +399,7 @@ function NewPlanSheet({ onClose }: { onClose: () => void }) {
           <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
             <SheetHeader
               title="New weekly plan"
-              subtitle="Milestone tasks for the week are added automatically"
+              subtitle="Recording actuals against each task comes next, from the plan detail"
               onClose={onClose}
             />
             <Dropdown
@@ -414,24 +409,15 @@ function NewPlanSheet({ onClose }: { onClose: () => void }) {
               options={greenhouses.map((g) => ({ value: g.name, label: g.label }))}
               placeholder="Pick a greenhouse"
             />
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <LabeledInput label="Year" value={year} onChangeText={setYear} keyboardType="number-pad" iconLeft="calendar-outline" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <LabeledInput label="ISO week" value={week} onChangeText={setWeek} keyboardType="number-pad" iconLeft="calendar-number-outline" />
-              </View>
-            </View>
+            <LabeledInput label="ISO week" value={week} onChangeText={setWeek} keyboardType="number-pad" iconLeft="calendar-number-outline" />
             <Dropdown
-              label="Variety target (optional)"
-              value={variety}
-              onChange={setVariety}
-              options={varieties.map((v) => ({ value: v.name, label: v.label }))}
-              placeholder="Pick a variety"
+              label="Task"
+              value={task}
+              onChange={setTask}
+              options={TASK_OPERATIONS.map((o) => ({ value: o, label: o }))}
+              searchable={false}
+              placeholder="Pick a task"
             />
-            {variety ? (
-              <LabeledInput label="Planned stems" value={plannedStems} onChangeText={setPlannedStems} keyboardType="number-pad" iconLeft="flower-outline" />
-            ) : null}
             <View style={{ marginTop: spacing.md }}>
               <Button label="Create plan" iconLeft="add" onPress={submit} disabled={acting} />
             </View>

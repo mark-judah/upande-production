@@ -94,19 +94,14 @@ export interface PickerOption {
 export interface BedConfigInput {
   from_bed: number;
   to_bed: number;
+  qty_planted: number;
   variety: string;
-  bed_length: number;
-  bed_width: number;
-  planting_date?: string;
 }
 
 export interface NewCropCyclePayload {
   greenhouse: string;
-  /** Link → Farm; derived from the selected greenhouse. Ignored if unknown. */
-  farm?: string;
-  company?: string;
   plants_per_sqm?: number;
-  gross_area?: number;
+  planting_date: string;
   bed_config: BedConfigInput[];
 }
 

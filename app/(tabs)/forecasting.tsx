@@ -13,6 +13,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { getISOWeek } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { Alert } from '@/src/components/Card';
+import { Dropdown } from '@/src/components/Dropdown';
 import { Pill } from '@/src/components/Pill';
 import { Spinner } from '@/src/components/Spinner';
 import { useToast } from '@/src/components/Toast';
@@ -23,6 +24,7 @@ import { useHarvestingStore } from '@/src/stores/harvestingStore';
 import { useProductionProjectionStore } from '@/src/stores/productionProjectionStore';
 import { ForecastThisWeek } from '@/src/components/ForecastThisWeek';
 import type { ProjectionUpdateRow } from '@/src/services/production-projection';
+import type { PickerOption } from '@/src/services/crop-cycle';
 
 /**
  * Forecasting — the screen exists to fill in Revised, so "This Week" (the
@@ -50,6 +52,7 @@ type ViewMode = 'edit' | 'compare';
 export default function ForecastingScreen() {
   const { showSuccess, showError } = useToast();
   const greenhouses = useCropCycleStore((s) => s.greenhouses);
+  const farms = useCropCycleStore((s) => s.farms);
   const loadPickers = useCropCycleStore((s) => s.loadPickers);
 
   const varieties = useHarvestingStore((s) => s.varieties);
@@ -72,8 +75,24 @@ export default function ForecastingScreen() {
   const [weekFilter, setWeekFilter] = useState<number | 'all'>(currentWeek);
   const [offBudgetOnly, setOffBudgetOnly] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
+  const [farmFilter, setFarmFilter] = useState('');
+  const [greenhouseFilter, setGreenhouseFilter] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // The default page is "all greenhouses" — Refresh (below) resets back to
+  // exactly this rather than just reloading data under whatever filters
+  // happen to be set.
+  const resetToDefault = () => {
+    setSearch('');
+    setScreenMode('thisWeek');
+    setWeekFilter(currentWeek);
+    setOffBudgetOnly(false);
+    setViewMode('edit');
+    setFarmFilter('');
+    setGreenhouseFilter('');
+    setExpandedGreenhouse(null);
+  };
 
   const stepWeek = (delta: number) => {
     setWeekFilter((w) => {
@@ -85,6 +104,12 @@ export default function ForecastingScreen() {
   useEffect(() => {
     setOffBudgetOnly(false);
   }, [weekFilter]);
+
+  useEffect(() => {
+    if (!farmFilter || !greenhouseFilter) return;
+    const gh = greenhouses.find((g) => g.name === greenhouseFilter);
+    if (gh && gh.farm !== farmFilter) setGreenhouseFilter('');
+  }, [farmFilter, greenhouseFilter, greenhouses]);
 
   // Browse mode only, below.
   const [expandedGreenhouse, setExpandedGreenhouse] = useState<string | null>(null);
@@ -116,11 +141,32 @@ export default function ForecastingScreen() {
     }
   }, [screenMode, expandedGreenhouse, variety, year, fetchProjection]);
 
+  // Farm/greenhouse scope only -- NOT search. ForecastThisWeek does its own
+  // row-level search across both greenhouse AND variety labels, so pre-
+  // filtering this list by search text would hide a variety-name match
+  // whose greenhouse label doesn't happen to match too.
+  const scopedGreenhouses = useMemo(() => {
+    return greenhouses.filter((g) => {
+      if (farmFilter && g.farm !== farmFilter) return false;
+      if (greenhouseFilter && g.name !== greenhouseFilter) return false;
+      return true;
+    });
+  }, [greenhouses, farmFilter, greenhouseFilter]);
+
+  // Browse mode's own card list has no row-level search of its own, so the
+  // search text narrows it directly here.
   const filteredGreenhouses = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return greenhouses;
-    return greenhouses.filter((g) => g.label.toLowerCase().includes(q));
-  }, [greenhouses, search]);
+    if (!q) return scopedGreenhouses;
+    return scopedGreenhouses.filter((g) => g.label.toLowerCase().includes(q));
+  }, [scopedGreenhouses, search]);
+
+  // Greenhouse filter options narrow to the selected farm, same as choosing
+  // it clears an incompatible greenhouse already picked.
+  const greenhouseFilterOptions = useMemo(
+    () => greenhouses.filter((g) => !farmFilter || g.farm === farmFilter),
+    [greenhouses, farmFilter],
+  );
 
   const lastWeek = useMemo(() => {
     if (!projection) return null;
@@ -189,7 +235,12 @@ export default function ForecastingScreen() {
   const colourBg = projection ? (COLOUR_BG[projection.colour] ?? colors.surfaceAlt) : colors.surfaceAlt;
   const colourFg = projection ? (COLOUR_FG[projection.colour] ?? colors.text) : colors.text;
 
-  const activeFilters = (weekFilter !== currentWeek ? 1 : 0) + (offBudgetOnly ? 1 : 0) + (screenMode === 'browse' ? 1 : 0);
+  const activeFilters =
+    (weekFilter !== currentWeek ? 1 : 0) +
+    (offBudgetOnly ? 1 : 0) +
+    (screenMode === 'browse' ? 1 : 0) +
+    (farmFilter ? 1 : 0) +
+    (greenhouseFilter ? 1 : 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -229,7 +280,7 @@ export default function ForecastingScreen() {
       >
         {screenMode === 'thisWeek' ? (
           <ForecastThisWeek
-            greenhouses={greenhouses}
+            greenhouses={scopedGreenhouses}
             year={year}
             weekNo={weekFilter === 'all' ? currentWeek : weekFilter}
             currentWeek={currentWeek}
@@ -432,12 +483,19 @@ export default function ForecastingScreen() {
         setOffBudgetOnly={setOffBudgetOnly}
         viewMode={viewMode}
         setViewMode={setViewMode}
+        farms={farms}
+        farmFilter={farmFilter}
+        setFarmFilter={setFarmFilter}
+        greenhouseOptions={greenhouseFilterOptions}
+        greenhouseFilter={greenhouseFilter}
+        setGreenhouseFilter={setGreenhouseFilter}
       />
 
       <MenuSheet
         visible={menuOpen}
         onClose={() => setMenuOpen(false)}
         onRefresh={() => {
+          resetToDefault();
           loadPickers();
           setMenuOpen(false);
         }}
@@ -465,6 +523,12 @@ function FilterSheet({
   setOffBudgetOnly,
   viewMode,
   setViewMode,
+  farms,
+  farmFilter,
+  setFarmFilter,
+  greenhouseOptions,
+  greenhouseFilter,
+  setGreenhouseFilter,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -479,6 +543,12 @@ function FilterSheet({
   setOffBudgetOnly: (v: boolean) => void;
   viewMode: ViewMode;
   setViewMode: (m: ViewMode) => void;
+  farms: PickerOption[];
+  farmFilter: string;
+  setFarmFilter: (v: string) => void;
+  greenhouseOptions: PickerOption[];
+  greenhouseFilter: string;
+  setGreenhouseFilter: (v: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   return (
@@ -492,6 +562,36 @@ function FilterSheet({
               <Ionicons name="close" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
+
+          <Text style={s.filterLabel}>FARM</Text>
+          <Dropdown
+            label="Farm"
+            value={farmFilter}
+            onChange={setFarmFilter}
+            options={farms.map((f) => ({ value: f.name, label: f.label }))}
+            placeholder="All farms"
+          />
+          {farmFilter ? (
+            <TouchableOpacity style={s.clearBtn} onPress={() => setFarmFilter('')}>
+              <Ionicons name="close-circle-outline" size={14} color={colors.textMuted} />
+              <Text style={s.clearText}>All farms</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <Text style={s.filterLabel}>GREENHOUSE</Text>
+          <Dropdown
+            label="Greenhouse"
+            value={greenhouseFilter}
+            onChange={setGreenhouseFilter}
+            options={greenhouseOptions.map((g) => ({ value: g.name, label: g.label }))}
+            placeholder="All greenhouses"
+          />
+          {greenhouseFilter ? (
+            <TouchableOpacity style={s.clearBtn} onPress={() => setGreenhouseFilter('')}>
+              <Ionicons name="close-circle-outline" size={14} color={colors.textMuted} />
+              <Text style={s.clearText}>All greenhouses</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <Text style={s.filterLabel}>VIEW</Text>
           <View style={s.segmented}>
@@ -729,6 +829,8 @@ const s = StyleSheet.create({
     fontFamily: fontFamily.semiBold, fontSize: 10, color: colors.textMuted,
     letterSpacing: 1.2, marginTop: spacing.lg, marginBottom: spacing.sm,
   },
+  clearBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4, alignSelf: 'flex-end' },
+  clearText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textMuted },
   segmented: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: borderRadius.full, padding: 2 },
   segItem: { flex: 1, alignItems: 'center', paddingVertical: spacing.sm, borderRadius: borderRadius.full },
   segItemActive: { backgroundColor: colors.primary },
