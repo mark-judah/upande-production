@@ -10,7 +10,7 @@ interface FieldRejectsState {
 }
 
 export const useFieldRejectsStore = create<FieldRejectsState>((set) => ({
-  acting: false,
+  acting: false, 
   submit: async (payload) => {
     set({ acting: true });
     try {

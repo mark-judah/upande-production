@@ -28,6 +28,7 @@ interface CropCycleState {
   greenhouses: PickerOption[];
   varieties: PickerOption[];
   farms: PickerOption[];
+  companies: PickerOption[];
   rejectionReasons: PickerOption[];
   pickersLoading: boolean;
   rejectionReasonsLoading: boolean;
@@ -53,6 +54,7 @@ export const useCropCycleStore = create<CropCycleState>((set, get) => ({
   greenhouses: [],
   varieties: [],
   farms: [],
+  companies: [],
   rejectionReasons: [],
   pickersLoading: false,
   rejectionReasonsLoading: false,
@@ -82,12 +84,13 @@ export const useCropCycleStore = create<CropCycleState>((set, get) => ({
     if (get().pickersLoading) return;
     set({ pickersLoading: true });
     try {
-      const [greenhouses, varieties, farms] = await Promise.all([
+      const [greenhouses, varieties, farms, companies] = await Promise.all([
         cropCycleApi.listGreenhouses(),
         cropCycleApi.listVarieties(),
         cropCycleApi.listFarms(),
+        cropCycleApi.listCompanies(),
       ]);
-      set({ greenhouses, varieties, farms, pickersLoading: false });
+      set({ greenhouses, varieties, farms, companies, pickersLoading: false });
     } catch {
       set({ pickersLoading: false });
     }

@@ -12,6 +12,10 @@ export const TASK_OPERATIONS = [
   'De-leaf', 'Weed', 'Feed', 'Plant', 'Uproot', 'Maintenance', 'Other',
 ] as const;
 
+export const DAYS_OF_WEEK = [
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+] as const;
+
 export interface PlanSummary {
   name: string;
   greenhouse: string;
@@ -23,6 +27,8 @@ export interface PlanSummary {
   tasksOpen: number;
   tasksDone: number;
   plannedStems: number;
+  owner: string;
+  isMine: boolean;
 }
 
 export interface PlanTask {
@@ -31,7 +37,9 @@ export interface PlanTask {
   operation: string;
   variety?: string;
   target: number;
+  actual: number;
   beds?: string;
+  dayOfWeek?: string;
   dueDate?: string;
   assignedTo?: string;
   assignedToName?: string;
@@ -63,6 +71,7 @@ export interface PlanDetail {
 export interface SavePlanPayload {
   name?: string;
   greenhouse?: string;
+  company?: string;
   plan_year?: number;
   plan_week?: number;
   tasks?: Array<{
@@ -71,7 +80,9 @@ export interface SavePlanPayload {
     operation?: string;
     variety?: string;
     target?: number;
+    actual?: number;
     beds?: string;
+    day_of_week?: string;
     due_date?: string;
     assigned_to?: string;
     status?: string;
@@ -84,16 +95,18 @@ export interface UpdateTaskPayload {
   task: string;
   status: TaskStatus;
   completion_note?: string;
+  actual?: number;
 }
 
 interface RawPlan {
   name?: string; greenhouse?: string; farm?: string;
   plan_year?: number; plan_week?: number; plan_period?: string;
   tasks_total?: number; tasks_open?: number; tasks_done?: number; planned_stems?: number;
+  owner?: string; is_mine?: boolean;
 }
 interface RawTask {
   name?: string; task_name?: string; operation?: string; variety?: string;
-  target?: number; beds?: string; due_date?: string; assigned_to?: string;
+  target?: number; actual?: number; beds?: string; day_of_week?: string; due_date?: string; assigned_to?: string;
   assigned_to_name?: string; status?: string; harvested?: number; completion_note?: string;
 }
 interface RawVariety {
@@ -117,6 +130,8 @@ function toSummary(r: RawPlan): PlanSummary {
     tasksOpen: Number(r.tasks_open ?? 0),
     tasksDone: Number(r.tasks_done ?? 0),
     plannedStems: Number(r.planned_stems ?? 0),
+    owner: String(r.owner ?? ''),
+    isMine: Boolean(r.is_mine),
   };
 }
 
@@ -127,7 +142,9 @@ function toTask(r: RawTask): PlanTask {
     operation: String(r.operation ?? ''),
     variety: r.variety ? String(r.variety) : undefined,
     target: Number(r.target ?? 0),
+    actual: Number(r.actual ?? 0),
     beds: r.beds ? String(r.beds) : undefined,
+    dayOfWeek: r.day_of_week ? String(r.day_of_week) : undefined,
     dueDate: r.due_date ? String(r.due_date) : undefined,
     assignedTo: r.assigned_to ? String(r.assigned_to) : undefined,
     assignedToName: r.assigned_to_name ? String(r.assigned_to_name) : undefined,
@@ -138,7 +155,7 @@ function toTask(r: RawTask): PlanTask {
 }
 
 export const planningApi = {
-  async list(filters?: { greenhouse?: string; plan_year?: number; plan_week?: number; limit?: number }): Promise<PlanSummary[]> {
+  async list(filters?: { greenhouse?: string; plan_year?: number; plan_week?: number; limit?: number; scope?: 'mine' | 'all' }): Promise<PlanSummary[]> {
     const body = await api<ListResponse>({
       method: 'POST',
       url: '/api/method/upande_agriculture.mobile.api.productionListPlanForms',

@@ -84,6 +84,9 @@ export interface PickerOption {
   label: string;
   /** Farm the greenhouse belongs to (when returned by productionListGreenhouses). */
   farm?: string;
+  /** Stock UOM (when returned by productionListVarieties) — a Harvest task's
+   *  target is a quantity of this variety, in this unit (e.g. "Stems"). */
+  uom?: string;
 }
 
 // --- New crop-cycle model (greenhouse-keyed, bed-range configuration) ---
@@ -146,6 +149,7 @@ interface PickerResponse {
     greenhouses?: PickerOption[];
     varieties?: PickerOption[];
     farms?: PickerOption[];
+    companies?: PickerOption[];
     reasons?: PickerOption[];
     error?: string;
   };
@@ -231,6 +235,15 @@ export const cropCycleApi = {
       data: { search: search ?? '', limit: 200 },
     });
     return body.data?.farms ?? [];
+  },
+
+  async listCompanies(search?: string): Promise<PickerOption[]> {
+    const body = await api<PickerResponse>({
+      method: 'POST',
+      url: '/api/method/upande_agriculture.mobile.api.productionListCompanies',
+      data: { search: search ?? '', limit: 200 },
+    });
+    return body.data?.companies ?? [];
   },
 
   async listRejectionReasons(): Promise<PickerOption[]> {

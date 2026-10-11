@@ -14,6 +14,7 @@ interface PlanFilters {
   greenhouse?: string;
   plan_year?: number;
   plan_week?: number;
+  scope?: 'mine' | 'all';
 }
 
 interface PlanningState {
@@ -40,7 +41,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   loading: false,
   error: null,
   acting: false,
-  filters: {},
+  filters: { scope: 'mine' },
 
   detail: null,
   detailLoading: false,
@@ -62,8 +63,9 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   },
 
   clearFilters: async () => {
-    set({ filters: {} });
-    await get().load({});
+    const next = { scope: get().filters.scope };
+    set({ filters: next });
+    await get().load(next);
   },
 
   open: async (name) => {
