@@ -59,9 +59,11 @@ an APK, because current builds use `runtimeVersion: {policy: "appVersion"}`.
   `upande_production.apk` so `releases/latest/download/upande_production.apk`
   works. OTA-only releases use `make_latest: false`.
 - **New vs Packhouse:** the release job also writes `latest.json` to `gh-pages`:
-  `{version, runtime, apkUrl, apkSize, publishedAt, notes}`. `apkUrl`/`apkSize`
-  always describe the newest APK release; `version`/`publishedAt` describe the
-  newest release of any kind.
+  `{version, runtime, release, apkUrl, publishedAt, notes}`. `version`/`publishedAt`
+  describe the newest release of any kind; `apkUrl` is the fixed
+  `releases/latest/download/upande_production.apk` URL. APK size is not in the file
+  (it is written before the APK is built); the app reads it from the GitHub
+  Releases API.
 
 ### 3.3 Config and plugins
 - `app.json`: `runtimeVersion` string, `updates.url` = Pages manifest for the
