@@ -34,6 +34,8 @@
       ]
     },
     "plugins": [
+      "./plugins/withReleaseSigning",
+      "./plugins/withBuildTuning",
       "expo-router",
       [
         "expo-splash-screen",
@@ -71,10 +73,15 @@
       "router": {},
       "eas": {
         "projectId": "4df5ead6-3af2-4da2-864b-2feece7714d4"
-      }
+      },
+      "otaBaseUrl": "https://mark-judah.github.io/upande-production/ota",
+      "runtimeSdk": 54
     },
     "updates": {
-      "url": "https://u.expo.dev/4df5ead6-3af2-4da2-864b-2feece7714d4"
+      "enabled": true,
+      "url": "https://mark-judah.github.io/upande-production/ota/android/101.0/manifest.json",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

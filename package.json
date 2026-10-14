@@ -18,7 +18,8 @@
     "version:next": "node scripts/version.mjs",
     "version:apply": "node scripts/version.mjs --apply",
     "version:notes": "node scripts/version.mjs --notes",
-    "ota:build": "node scripts/publish-ota.mjs"
+    "ota:build": "node scripts/publish-ota.mjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "^0.4.2",
@@ -41,6 +42,7 @@
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
+    "expo-intent-launcher": "~13.0.8",
     "expo-linking": "~8.0.11",
     "expo-local-authentication": "~17.0.8",
     "expo-network": "~8.0.8",
@@ -68,6 +70,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "patch-package": "^8.0.1",
     "typescript": "~5.9.2"
   }
 }
