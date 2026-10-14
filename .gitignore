@@ -41,3 +41,13 @@ example
 # generated native folders
 /ios
 /android
+
+# release pipeline
+ota/
+.ota-export/
+android/
+*.keystore
+SECRETS-TO-UPLOAD.txt
+version.json
+RELEASE_NOTES.md
+ota-meta/
