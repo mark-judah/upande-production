@@ -41,6 +41,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Bucket Status', icon: 'cube-outline', route: '/bucket-status' },
 ];
 
+/** Shown only to the Support Team role (the server re-checks every call). */
+const SUPPORT_NAV_ITEM: NavItem = {
+  label: 'Install Stats',
+  icon: 'phone-portrait-outline',
+  route: '/support-installs',
+};
+
 export function DrawerMenu() {
   const router = useRouter();
   const visible = useUIStore((s) => s.drawerOpen);
@@ -50,6 +57,8 @@ export function DrawerMenu() {
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
   const logout = useAuthStore((s) => s.logout);
+  const isSupport = useAuthStore((s) => s.hasRole('Support Team') || s.hasRole('System Manager'));
+  const navItems = isSupport ? [...NAV_ITEMS, SUPPORT_NAV_ITEM] : NAV_ITEMS;
 
   const drawerWidth = Math.min(Math.max(screenWidth * 0.8, 240), 320);
   const slide = useRef(new Animated.Value(-drawerWidth)).current;
@@ -140,7 +149,7 @@ export function DrawerMenu() {
             </View>
 
             <View style={s.nav}>
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <TouchableOpacity
                   key={item.route}
                   style={s.navItem}

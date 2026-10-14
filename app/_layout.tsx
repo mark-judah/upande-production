@@ -99,6 +99,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="login" />
           <Stack.Screen name="biometric-lock" options={{ animation: 'fade' }} />
+          <Stack.Screen name="support-installs" />
           <Stack.Screen name="update-required" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen
             name="camera-scanner"
