@@ -115,23 +115,6 @@ jobs:
       - name: Build the JS update
         run: npm run ota:build
 
-      # The server reads this to know the newest release (Support dashboard and
-      # the update-required screen). apkUrl is the fixed "latest" download URL.
-      - name: Write latest.json
-        run: |
-          set -euo pipefail
-          notes=$(node scripts/version.mjs --keep-version --notes | head -c 2000)
-          jq -n \
-            --arg version "${{ steps.version.outputs.version }}" \
-            --arg runtime "${{ steps.version.outputs.runtime }}" \
-            --arg release "${{ steps.version.outputs.release }}" \
-            --arg apkUrl "https://github.com/${{ github.repository }}/releases/latest/download/upande_production.apk" \
-            --arg publishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg notes "$notes" \
-            '{version:$version, runtime:$runtime, release:$release, apkUrl:$apkUrl, publishedAt:$publishedAt, notes:$notes}' \
-            > ota/latest.json
-          cat ota/latest.json
-
       - name: Publish the JS update to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -353,6 +336,36 @@ jobs:
           # An OTA release has no APK: keep "latest" on the newest APK release so
           # releases/latest/download/upande_production.apk never 404s.
           make_latest: false
+
+      # The server reads this to know the newest release (Support dashboard, the
+      # update-required screen). It goes out LAST, once the tag and GitHub Release exist:
+      # publishing it earlier would advertise a release whose APK may still fail to build,
+      # and every device would read as "behind" until the rerun. apkUrl is the fixed
+      # "latest" download URL.
+      - name: Write latest.json
+        run: |
+          set -euo pipefail
+          mkdir -p ota-meta
+          notes=$(head -c 2000 RELEASE_NOTES.md)
+          jq -n \
+            --arg version "${{ steps.version.outputs.version }}" \
+            --arg runtime "${{ steps.version.outputs.runtime }}" \
+            --arg release "${{ steps.version.outputs.release }}" \
+            --arg apkUrl "https://github.com/${{ github.repository }}/releases/latest/download/upande_production.apk" \
+            --arg publishedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg notes "$notes" \
+            '{version:$version, runtime:$runtime, release:$release, apkUrl:$apkUrl, publishedAt:$publishedAt, notes:$notes}' \
+            > ota-meta/latest.json
+          cat ota-meta/latest.json
+
+      - name: Publish latest.json to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./ota-meta
+          destination_dir: ota
+          keep_files: true
+          commit_message: 'ota: latest.json ${{ steps.version.outputs.version }}'
 
       - name: Job summary
         run: |

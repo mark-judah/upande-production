@@ -86,7 +86,7 @@ Settings live in the single doctype **Mobile Release Policy**:
 | --- | --- |
 | `enforce_gate` | master switch — **off by default** |
 | `min_supported_version` | x.y.z; builds below it are blocked |
-| `block_unidentified` | also block clients that send no app/version header |
+| `block_unidentified` | **caution:** also blocks every caller that sends no `X-App-Name` on `upande_agriculture.mobile.*` — that includes the Quality and Packhouse apps, which share those methods and send no header. Leave off unless they send their own. |
 | `latest_json_url` | where the newest-release file is read from |
 
 Exempt from the gate (a blocked phone must still be able to sign in, report itself and
@@ -105,7 +105,18 @@ check itself errors, the request goes through.
 4. Switch `enforce_gate` on.
 
 **Emergency off:** set `enforce_gate` to 0 in *Mobile Release Policy*; it applies to the
-very next request.
+very next request, and phones already showing the lock screen release themselves the
+next time the app is brought to the foreground (no force-kill needed).
+
+**Guard rail:** *Set minimum* refuses a version newer than the latest published release
+(read from `latest.json`) — nothing could ever satisfy it and the whole fleet, Support
+included, would be locked out. If the latest release is unknown the check is skipped.
+
+**What the gate protects against, and what it does not:** the `X-App-*` headers are
+supplied by the client, which is fine for stale builds but not a defence against a
+malicious one. The telemetry endpoint is shared with other fleet apps; only reports
+identifying as Upande Production (`app: "production"` or `app_name: "Upande Production"`)
+create or update *Mobile Device* rows.
 
 ## Install Stats (Support Team)
 

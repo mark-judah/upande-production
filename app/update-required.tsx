@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 import * as Updates from 'expo-updates';
 import { Screen } from '@/src/components/Screen';
@@ -6,7 +6,8 @@ import { Button } from '@/src/components/Button';
 import { useUpdateRequiredStore } from '@/src/stores/updateRequiredStore';
 import { useApkUpdate } from '@/src/services/updates/UpdateProvider';
 import { formatBytes } from '@/src/services/updates/releases';
-import { compareVersions } from '@/src/services/updates/compare-versions';
+import { openInBrowser } from '@/src/services/updates/install-apk';
+import { shouldRefreshApk, shouldUnlock } from '@/src/services/updates/gate-state';
 import { getReleaseInfo } from '@/src/services/release-info';
 import { APP_VERSION } from '@/src/services/version';
 import { colors, fontFamily, fontSize, spacing } from '@/src/theme';
@@ -22,6 +23,8 @@ export default function UpdateRequiredScreen() {
   const [otaReady, setOtaReady] = useState(false);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [apkUrl, setApkUrl] = useState<string | null>(null);
+  const lastApkCheck = useRef(0);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
@@ -33,10 +36,11 @@ export default function UpdateRequiredScreen() {
     setMessage(null);
     try {
       const info = await getReleaseInfo();
-      if (info?.minSupported && compareVersions(APP_VERSION, info.minSupported) >= 0) {
+      if (shouldUnlock(info, APP_VERSION)) {
         clear();
         return;
       }
+      setApkUrl(info?.apkUrl ?? null);
       if (!__DEV__ && Updates.isEnabled) {
         try {
           const found = await Updates.checkForUpdateAsync();
@@ -48,7 +52,12 @@ export default function UpdateRequiredScreen() {
           // No JS update for this runtime: fall through to the APK.
         }
       }
-      await refresh();
+      // GitHub allows 60 unauthenticated requests/hour per IP and a farm shares one: ask
+      // at most every few minutes, however often the phone is foregrounded.
+      if (shouldRefreshApk(lastApkCheck.current, Date.now())) {
+        lastApkCheck.current = Date.now();
+        await refresh();
+      }
     } finally {
       setWorking(false);
     }
@@ -75,6 +84,11 @@ export default function UpdateRequiredScreen() {
       return;
     }
     await recheck();
+    if (apkUrl) {
+      // GitHub could not be asked (rate limit / offline): the server knows the APK link.
+      await openInBrowser(apkUrl).catch(() => setMessage('Could not open the download link.'));
+      return;
+    }
     setMessage('No update is available yet. Check your connection and try again.');
   };
 
@@ -86,7 +100,7 @@ export default function UpdateRequiredScreen() {
   else if (apk && check?.available) {
     const size = formatBytes(apk.sizeBytes);
     label = `Download v${apk.version}${size ? ` (${size})` : ''}`;
-  }
+  } else if (apkUrl) label = 'Download the update';
 
   return (
     <Screen>

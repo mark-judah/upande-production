@@ -12,6 +12,8 @@ import { APP_VERSION, INSTALLED_APK_VERSION, RUNTIME_VERSION } from '@/src/servi
 import { getDeviceId } from '@/src/services/device-id';
 
 export type TelemetryPayload = {
+  /** Which fleet app this is: the telemetry endpoint is shared with other apps. */
+  app: 'production';
   device_id: string;
   device_name: string;
   model: string;
@@ -85,6 +87,7 @@ export async function collectTelemetry(): Promise<TelemetryPayload> {
   const netState = net as Network.NetworkState;
   const disk = diskSpace();
   return {
+    app: 'production',
     device_id: id,
     device_name: Device.deviceName ?? '',
     model: Device.modelName ?? '',
