@@ -8,6 +8,8 @@ import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
 import { Paths } from 'expo-file-system';
 import { storage, StorageKeys } from '@/src/services/storage';
+import { APP_VERSION, INSTALLED_APK_VERSION, RUNTIME_VERSION } from '@/src/services/version';
+import { getDeviceId } from '@/src/services/device-id';
 
 export type TelemetryPayload = {
   device_id: string;
@@ -18,6 +20,9 @@ export type TelemetryPayload = {
   os_version: string;
   app_name: string;
   app_version: string;
+  /** Installed APK version (OTA never changes it) and the update runtime. */
+  native_version: string;
+  runtime: string;
   build: string;
   ota_update_id: string;
   ota_channel: string;
@@ -50,16 +55,6 @@ function diskSpace(): { free: number; total: number } {
   return { free, total };
 }
 
-async function deviceId(): Promise<string> {
-  try {
-    if (Platform.OS === 'android') return Application.getAndroidId() ?? '';
-    const v = await Application.getIosIdForVendorAsync();
-    return v ?? '';
-  } catch {
-    return '';
-  }
-}
-
 const NET: Record<string, string> = {
   [Network.NetworkStateType.WIFI]: 'wifi',
   [Network.NetworkStateType.CELLULAR]: 'cellular',
@@ -79,7 +74,7 @@ const BATT: Record<number, string> = {
 
 export async function collectTelemetry(): Promise<TelemetryPayload> {
   const [id, level, state, net, gen, user, userFullName] = await Promise.all([
-    deviceId(),
+    getDeviceId(),
     Battery.getBatteryLevelAsync().catch(() => -1),
     Battery.getBatteryStateAsync().catch(() => Battery.BatteryState.UNKNOWN),
     Network.getNetworkStateAsync().catch(() => ({}) as Network.NetworkState),
@@ -96,10 +91,11 @@ export async function collectTelemetry(): Promise<TelemetryPayload> {
     brand: Device.brand ?? '',
     os: Platform.OS,
     os_version: String(Device.osVersion ?? Platform.Version ?? ''),
-    // Match what the app UI shows (Constants.expoConfig.version); nativeApplicationVersion
-    // returns the host app (e.g. Expo Go / SDK) version in some builds.
+    // The running JS version (an OTA bundle's own), not the installed APK's.
     app_name: Application.applicationName ?? Constants.expoConfig?.name ?? '',
-    app_version: Constants.expoConfig?.version ?? Application.nativeApplicationVersion ?? '',
+    app_version: APP_VERSION,
+    native_version: INSTALLED_APK_VERSION,
+    runtime: RUNTIME_VERSION,
     build: Application.nativeBuildVersion ?? '',
     ota_update_id: Updates.updateId ?? '',
     ota_channel: (Updates.channel as string) ?? '',
