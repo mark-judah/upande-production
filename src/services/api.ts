@@ -8,6 +8,9 @@ import axios, {
 } from 'axios';
 import { storage, StorageKeys } from './storage';
 import { useNetworkStore } from '@/src/stores/networkStore';
+import { useUpdateRequiredStore } from '@/src/stores/updateRequiredStore';
+import { APP_VERSION, RUNTIME_VERSION } from './version';
+import { getDeviceId } from './device-id';
 
 /** Toggle to silence all API logs (e.g. in release builds). */
 const LOG_ENABLED = true;
@@ -131,6 +134,14 @@ function buildClient(): AxiosInstance {
     if (!config.headers['Content-Type']) {
       (config.headers as Record<string, string>)['Content-Type'] = 'application/json';
     }
+    // Identify this build so the server can enforce the minimum-version gate and
+    // the Support dashboard can see who is on what.
+    const h = config.headers as Record<string, string>;
+    h['X-App-Name'] = 'production';
+    h['X-App-Version'] = APP_VERSION;
+    h['X-App-Runtime'] = RUNTIME_VERSION;
+    const deviceId = await getDeviceId();
+    if (deviceId) h['X-Device-Id'] = deviceId;
     (config as TimedConfig).__startedAt = Date.now();
     logRequest(config);
     return config;
@@ -150,6 +161,11 @@ function buildClient(): AxiosInstance {
       // No response means the request never landed — likely a network problem.
       if (!error.response) {
         try { useNetworkStore.getState().notifyApiFailure(); } catch {}
+        return Promise.reject(error);
+      }
+      // 426: the server's minimum-version gate. Lock the app to the update screen.
+      if (error.response.status === 426) {
+        try { useUpdateRequiredStore.getState().trigger(error.response.data); } catch {}
         return Promise.reject(error);
       }
       // Expired session → silently re-login with the stored password and retry

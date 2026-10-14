@@ -10,6 +10,7 @@ export const StorageKeys = {
   fullName: 'fullname',
   userStation: 'userStation',
   versionLastReportedOn: 'versionLastReportedOn',
+  apkUpdateCheck: 'apk_update_check',
   userRoles: 'userRoles',
   biometricEnabled: 'biometric_enabled',
   // Password, kept in the OS secure enclave. Fed back into the login endpoint to
