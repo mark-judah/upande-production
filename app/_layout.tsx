@@ -69,7 +69,7 @@ export default function RootLayout() {
     }
     // The server's minimum-version gate rejected this build: lock to the update screen.
     if (updateRequired) {
-      if (first !== 'update-required') router.replace('/update-required');
+      if (first !== 'update-required') router.replace('/update-required' as never);
       return;
     }
     if (first === 'update-required') {
