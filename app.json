@@ -38,6 +38,14 @@
       "./plugins/withBuildTuning",
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/upande_logo.png",
