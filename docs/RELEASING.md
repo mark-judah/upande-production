@@ -3,7 +3,7 @@
 Upande Production ships like Upande Packhouse and Upande Quality: every merge to
 `master` advances the version one step and either publishes a **JS update (OTA)** or
 builds a **signed APK**. A server-side **minimum-version gate** stops out-of-date
-builds from sending data, and the **Install Stats** page (Support Team) shows who is
+builds from sending data, and the **Devices** screen (Support Team) shows who is
 behind. Expo SDK 54.
 
 ```
@@ -91,17 +91,17 @@ Settings live in the single doctype **Mobile Release Policy**:
 
 Exempt from the gate (a blocked phone must still be able to sign in, report itself and
 update): `login`, `mobileLogin`, `getCurrentUserRoles`, `reportDeviceTelemetry`,
-`getReleaseInfo`, `getSupportDashboard`, `setMinVersion`. The hook **fails open**: if the
+`getReleaseInfo`, `getDeviceOverview`, `getSupportDashboard`, `setMinVersion`. The hook **fails open**: if the
 check itself errors, the request goes through.
 
 ### Rollout order
 
 1. Release the APK that contains the gate-aware app (this is `1.0.0`).
-2. Watch **Install Stats** until most devices are on it. Builds from before the gate do
-   not send the headers, so they are never blocked — they show up as *behind* or
-   *never reported* so Support can chase them.
-3. Set the minimum version (Install Stats → **Set minimum**). The dialog previews how
-   many devices and users it would lock out.
+2. Watch **Devices running the app** until most devices are on it. Builds from before the gate do
+   not send the headers, so they are never blocked — they show up with an amber version
+   pill (or are missing from the list entirely) so Support can chase them.
+3. Set the minimum version in *Mobile Release Policy* (desk). Check *Versions in use* first:
+   everyone below the floor gets locked out.
 4. Switch `enforce_gate` on.
 
 **Emergency off:** set `enforce_gate` to 0 in *Mobile Release Policy*; it applies to the
@@ -118,16 +118,26 @@ malicious one. The telemetry endpoint is shared with other fleet apps; only repo
 identifying as Upande Production (`app: "production"` or `app_name: "Upande Production"`)
 create or update *Mobile Device* rows.
 
-## Install Stats (Support Team)
+## Settings → App updates, This device, Devices running the app
 
-Users with the **Support Team** role (or System Manager) get an *Install Stats* entry in
-the drawer: latest vs. minimum version, % of devices on the latest, a version
-distribution (tap to filter), and the devices that are behind grouped by farm, each
-with a reason (*Missed update*, *Needs new APK*, *Offline Nd*, *Low storage*,
-*Blocked N×*), the user's phone (call / WhatsApp) and a share-list button. Farm and
-phone come from the user's **Employee** record (`custom_farm`, `cell_number`).
-The role is created by patch `create_support_team_role`; the server re-checks it on
-every call.
+**Settings** shows an *App updates* card (installed vs latest version, and *Check for
+updates*) and a collapsible *This device* card (model, name, OS, install ID). Users with
+the **Support Team** role (or System Manager) also get a *Devices running the app* row
+there, which opens the **Devices** screen:
+
+* tiles: devices, users, active in the last 7 / 30 days;
+* *Versions in use*: how many devices are on each version, the latest flagged;
+* *People*: one row per user with their device count, sign-ins (successful logins from
+  Frappe's Activity Log), the version of their oldest device (green = latest, amber =
+  behind) and when they were last seen;
+* *All devices*: searchable by model, user, farm or IP, filterable to the last 7 / 30
+  days, each with its version pill. Farm and phone come from the user's **Employee**
+  record (`custom_farm`, `cell_number`).
+
+The data comes from `upande_agriculture.mobile.support_api.getDeviceOverview`, which
+re-checks the Support Team role on every call. The minimum version is set on *Mobile
+Release Policy* in the desk (the `setMinVersion` API also remains, with its dry-run
+count and the refusal of a floor above the latest release).
 
 ## Local builds
 

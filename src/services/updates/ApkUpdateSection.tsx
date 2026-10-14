@@ -9,6 +9,8 @@ import { openInBrowser, openUnknownAppSourcesSettings } from './install-apk';
 import { useApkUpdate } from './UpdateProvider';
 import { showDialog } from './dialog';
 import { useNetworkStore } from '@/src/stores/networkStore';
+import { APP_VERSION } from '@/src/services/version';
+import { updateStatusLine } from './status-line';
 
 /**
  * The one "Check for updates" button in Settings → App. A new APK is checked
@@ -119,15 +121,24 @@ export function ApkUpdateSection() {
     );
   }, [installError, apk]);
 
-  let status: string | null = null;
-  if (check) {
-    // Only news is shown: being up to date needs no line of its own.
-    if (ready && apk) status = `v${apk.version} is downloaded and ready to install.`;
-    else if (available && apk) status = `v${apk.version} is available as a new APK.`;
-  }
+  const status = updateStatusLine({
+    installed: APP_VERSION,
+    latest: check?.latestVersion ?? null,
+    apkVersion: apk?.version ?? null,
+    apkAvailable: available,
+    apkDownloaded: ready,
+  });
 
   return (
     <View>
+      <View style={s.kv}>
+        <Text style={s.kvLabel}>Installed</Text>
+        <Text style={s.kvValue}>{APP_VERSION}</Text>
+      </View>
+      <View style={s.kv}>
+        <Text style={s.kvLabel}>Latest</Text>
+        <Text style={s.kvValue}>{check?.latestVersion ?? '—'}</Text>
+      </View>
       {status ? <Text style={[s.hint, available && s.accent]}>{status}</Text> : null}
       {checkError && !(checkError.kind === 'offline' && !online) ? (
         <Text style={s.error}>
@@ -158,6 +169,9 @@ export function ApkUpdateSection() {
 }
 
 const s = StyleSheet.create({
+  kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  kvLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.textSecondary },
+  kvValue: { fontFamily: fontFamily.medium, fontSize: fontSize.md, color: colors.text },
   hint: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted, marginTop: spacing.sm },
   accent: { fontFamily: fontFamily.semiBold, color: colors.primary },
   error: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.danger, marginTop: spacing.sm },

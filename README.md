@@ -57,4 +57,4 @@ Join our community of developers creating universal apps.
 
 ## Releases and updates
 
-See [docs/RELEASING.md](docs/RELEASING.md): odometer versioning, OTA updates, APK builds, the minimum-version gate and the Support Team *Install Stats* page.
+See [docs/RELEASING.md](docs/RELEASING.md): odometer versioning, OTA updates, APK builds, the minimum-version gate and the Support Team *Devices* screen.

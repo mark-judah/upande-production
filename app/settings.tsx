@@ -8,7 +8,7 @@ import { useToast } from '@/src/components/Toast';
 import { useAuthStore } from '@/src/stores/authStore';
 import * as Biometric from '@/src/services/biometric';
 import { ApkUpdateSection } from '@/src/services/updates/ApkUpdateSection';
-import { APP_VERSION, RUNTIME_VERSION } from '@/src/services/version';
+import { ThisDeviceCard } from '@/src/components/ThisDeviceCard';
 import { colors, fontFamily, fontSize, spacing } from '@/src/theme';
 
 export default function SettingsScreen() {  
@@ -19,6 +19,8 @@ export default function SettingsScreen() {
   const biometricEnabled = useAuthStore((s) => s.biometricEnabled);
   const setBiometricEnabled = useAuthStore((s) => s.setBiometricEnabled);
   const logout = useAuthStore((s) => s.logout);
+  // The fleet list is for Support (the server re-checks the role on every call).
+  const canSeeDevices = useAuthStore((s) => s.hasRole('Support Team') || s.hasRole('System Manager'));
   const forgetDevice = useAuthStore((s) => s.forgetDevice);
   const { showSuccess, showError } = useToast();
   const [moduleReady, setModuleReady] = useState(false);
@@ -28,9 +30,6 @@ export default function SettingsScreen() {
     setModuleReady(Biometric.isModuleAvailable());
     Biometric.isAvailable().then(setHardwareReady);
   }, []);
-
-  const appVersion = APP_VERSION;
-  const runtimeVersion = RUNTIME_VERSION;
 
   const onToggleBiometric = async () => {
     if (!biometricEnabled) {
@@ -132,18 +131,11 @@ export default function SettingsScreen() {
         </View>
       </Card>
 
-      <Card title="App">
-        <View style={s.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.rowLabel}>Version</Text>
-            <Text style={s.rowHint}>
-              {appVersion}{runtimeVersion && runtimeVersion !== appVersion ? `  ·  runtime ${runtimeVersion}` : ''}
-            </Text>
-          </View>
-        </View>
-        <View style={{ height: spacing.md }} />
+      <Card title="App updates">
         <ApkUpdateSection />
       </Card>
+
+      <ThisDeviceCard showDevicesLink={canSeeDevices} />
 
       <Card title="Session">
         <Button label="Sign out" variant="outline" onPress={onSignOut} />
