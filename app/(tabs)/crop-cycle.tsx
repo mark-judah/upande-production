@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -27,11 +26,7 @@ import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme
 import { useRefreshOnFocus } from '@/src/hooks/useRefreshOnFocus';
 import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import { useHarvestingStore } from '@/src/stores/harvestingStore';
-import {
-  REPLANT_REASONS,
-  UPROOT_REASONS,
-  type CropCycle,
-} from '@/src/services/crop-cycle';
+import { type CropCycle } from '@/src/services/crop-cycle';
 
 function todayIso(): string {
   const d = new Date();
@@ -40,8 +35,6 @@ function todayIso(): string {
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
-
-type SheetKind = 'plant' | 'uproot' | 'replant' | null;
 
 export default function CropCycleScreen() {
   const cycles = useCropCycleStore((s) => s.cycles);
@@ -52,7 +45,6 @@ export default function CropCycleScreen() {
   const filters = useCropCycleStore((s) => s.filters);
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<CropCycle | null>(null);
-  const [sheet, setSheet] = useState<SheetKind>(null);
   const router = useRouter();
 
   useRefreshOnFocus(() => {
@@ -112,7 +104,7 @@ export default function CropCycleScreen() {
       </ScrollView>
 
       {/* FAB stays mounted across the planting flow so it can smoothly morph
-          into the close button. Other sheets (uproot/replant/detail) hide it. */}
+          into the close button. The cycle detail sheet hides it. */}
       <FAB
         icon="add"
         onPress={() =>
@@ -124,37 +116,30 @@ export default function CropCycleScreen() {
             },
           } as never)
         }
-        visible={!selected && sheet === null}
+        visible={!selected}
       />
 
       {/* Old in-screen planting sheet is retired in favour of the dedicated
-          /crop-cycle/new screen (new doctype model). Kept inert for now while
-          uproot/replant still use the old flow. */}
-      <PlantingSheet visible={false} onClose={() => setSheet(null)} />
+          /crop-cycle/new screen (new doctype model). Kept inert for now. */}
+      <PlantingSheet visible={false} onClose={() => {}} />
 
-      {/* Cycle detail sheet — opens when a list row is tapped */}
+      {/* Cycle detail sheet — opens when a list row is tapped. Uproot/replant
+          are full pages (app/crop-cycle/uproot.tsx, app/crop-cycle/replant.tsx)
+          rather than in-screen sheets. */}
       {selected ? (
         <CycleDetailSheet
           cycle={selected}
           onClose={() => setSelected(null)}
-          onUproot={() => setSheet('uproot')}
-          onReplant={() => setSheet('replant')}
-        />
-      ) : null}
-
-      {/* Action sheets */}
-      {sheet === 'uproot' && selected ? (
-        <UprootSheet
-          cycle={selected}
-          onClose={() => setSheet(null)}
-          onDone={() => { setSheet(null); setSelected(null); }}
-        />
-      ) : null}
-      {sheet === 'replant' && selected ? (
-        <ReplantSheet
-          cycle={selected}
-          onClose={() => setSheet(null)}
-          onDone={() => { setSheet(null); setSelected(null); }}
+          onUproot={() => {
+            const name = selected.name;
+            setSelected(null);
+            router.push({ pathname: '/crop-cycle/uproot', params: { cycle: name } } as never);
+          }}
+          onReplant={() => {
+            const name = selected.name;
+            setSelected(null);
+            router.push({ pathname: '/crop-cycle/replant', params: { cycle: name } } as never);
+          }}
         />
       ) : null}
     </View>
@@ -393,308 +378,6 @@ function PlantingSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   );
 }
 
-/* ─── Uproot sheet ─────────────────────────────────────────────────────── */
-
-function UprootSheet({
-  cycle,
-  onClose,
-  onDone,
-}: {
-  cycle: CropCycle;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const { showSuccess, showError } = useToast();
-  const acting = useCropCycleStore((st) => st.acting);
-  const recordUproot = useCropCycleStore((st) => st.recordUproot);
-
-  const [uprootDate, setUprootDate] = useState(todayIso());
-  const [fromBed, setFromBed] = useState(String(cycle.startBed));
-  const [toBed, setToBed] = useState(String(cycle.endBed));
-  const [qty, setQty] = useState('');
-  const [reason, setReason] = useState('');
-  const [notes, setNotes] = useState('');
-
-  const submit = async () => {
-    if (!uprootDate || !fromBed || !toBed || !qty || !reason) {
-      showError('Fill all required fields.');
-      return;
-    }
-    const outcome = await recordUproot({
-      crop_cycle: cycle.name,
-      uproot_date: uprootDate,
-      from_bed: Number(fromBed),
-      to_bed: Number(toBed),
-      qty_uprooted: Number(qty),
-      reason,
-      notes: notes || undefined,
-    });
-    if (outcome.ok) {
-      showSuccess(outcome.message || 'Uproot recorded.');
-      onDone();
-    } else {
-      showError(outcome.error);
-    }
-  };
-
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
-            <SheetHeader
-              title="Record uproot"
-              subtitle={`${cycle.variety} · ${cycle.greenhouse}`}
-              onClose={onClose}
-            />
-
-            <LabeledInput
-              label="Uproot date"
-              value={uprootDate}
-              onChangeText={setUprootDate}
-              placeholder="YYYY-MM-DD"
-              iconLeft="calendar-outline"
-              autoCapitalize="none"
-            />
-
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <LabeledInput
-                  label="From bed"
-                  value={fromBed}
-                  onChangeText={setFromBed}
-                  keyboardType="number-pad"
-                  iconLeft="git-commit-outline"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <LabeledInput
-                  label="To bed"
-                  value={toBed}
-                  onChangeText={setToBed}
-                  keyboardType="number-pad"
-                  iconLeft="git-commit-outline"
-                />
-              </View>
-            </View>
-
-            <LabeledInput
-              label="Qty uprooted"
-              value={qty}
-              onChangeText={setQty}
-              keyboardType="number-pad"
-              iconLeft="trash-outline"
-            />
-
-            <Dropdown
-              label="Reason"
-              value={reason}
-              onChange={setReason}
-              options={UPROOT_REASONS.map((r) => ({ value: r, label: r }))}
-              searchable={false}
-              placeholder="Pick a reason"
-            />
-
-            <View style={{ height: spacing.md }} />
-            <Text style={s.fieldLabel}>Notes (optional)</Text>
-            <TextInput
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-              placeholder="Anything worth noting"
-              placeholderTextColor={colors.textMuted}
-              style={s.textarea}
-            />
-
-            <View style={{ height: spacing.md }} />
-            <Button label="Submit uproot" loading={acting} onPress={submit} />
-          </KeyboardAwareScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-/* ─── Replant sheet ────────────────────────────────────────────────────── */
-
-function ReplantSheet({
-  cycle,
-  onClose,
-  onDone,
-}: {
-  cycle: CropCycle;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  const { showSuccess, showError } = useToast();
-  const varieties = useCropCycleStore((st) => st.varieties);
-  const acting = useCropCycleStore((st) => st.acting);
-  const recordReplant = useCropCycleStore((st) => st.recordReplant);
-
-  const [date, setDate] = useState(todayIso());
-  const [fromBed, setFromBed] = useState(String(cycle.startBed));
-  const [toBed, setToBed] = useState(String(cycle.endBed));
-  const [newVariety, setNewVariety] = useState('');
-  const [qtyUprooted, setQtyUprooted] = useState('');
-  const [qtyReplanted, setQtyReplanted] = useState('');
-  const [costPerPlant, setCostPerPlant] = useState('');
-  const [sourceType, setSourceType] = useState<'Propagation Batch' | 'Purchase Order' | ''>('');
-  const [reason, setReason] = useState('');
-  const [remarks, setRemarks] = useState('');
-
-  const submit = async () => {
-    if (!date || !fromBed || !toBed || !newVariety || !qtyUprooted || !qtyReplanted || !reason) {
-      showError('Fill all required fields.');
-      return;
-    }
-    const outcome = await recordReplant({
-      crop_cycle: cycle.name,
-      replanting_date: date,
-      from_bed: Number(fromBed),
-      to_bed: Number(toBed),
-      new_variety: newVariety,
-      qty_uprooted: Number(qtyUprooted),
-      qty_replanted: Number(qtyReplanted),
-      cost_per_plant: costPerPlant ? Number(costPerPlant) : undefined,
-      source_type: sourceType || undefined,
-      reason,
-      remarks: remarks || undefined,
-    });
-    if (outcome.ok) {
-      showSuccess(outcome.message || 'Replant recorded.');
-      onDone();
-    } else {
-      showError(outcome.error);
-    }
-  };
-
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
-            <SheetHeader
-              title="Record replant"
-              subtitle={`Replacing ${cycle.variety} · ${cycle.greenhouse}`}
-              onClose={onClose}
-            />
-
-            <LabeledInput
-              label="Replanting date"
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-              iconLeft="calendar-outline"
-              autoCapitalize="none"
-            />
-
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <LabeledInput
-                  label="From bed"
-                  value={fromBed}
-                  onChangeText={setFromBed}
-                  keyboardType="number-pad"
-                  iconLeft="git-commit-outline"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <LabeledInput
-                  label="To bed"
-                  value={toBed}
-                  onChangeText={setToBed}
-                  keyboardType="number-pad"
-                  iconLeft="git-commit-outline"
-                />
-              </View>
-            </View>
-
-            <Dropdown
-              label="New variety"
-              value={newVariety}
-              onChange={setNewVariety}
-              options={varieties.map((v) => ({ value: v.name, label: v.label }))}
-              placeholder="Pick the variety being planted"
-            />
-            <View style={{ height: spacing.md }} />
-
-            <View style={s.row2}>
-              <View style={{ flex: 1 }}>
-                <LabeledInput
-                  label="Qty uprooted"
-                  value={qtyUprooted}
-                  onChangeText={setQtyUprooted}
-                  keyboardType="number-pad"
-                  iconLeft="trash-outline"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <LabeledInput
-                  label="Qty replanted"
-                  value={qtyReplanted}
-                  onChangeText={setQtyReplanted}
-                  keyboardType="number-pad"
-                  iconLeft="leaf-outline"
-                />
-              </View>
-            </View>
-
-            <LabeledInput
-              label="Cost per plant (optional)"
-              value={costPerPlant}
-              onChangeText={setCostPerPlant}
-              keyboardType="decimal-pad"
-              iconLeft="cash-outline"
-            />
-
-            <Dropdown
-              label="Source (optional)"
-              value={sourceType}
-              onChange={(v) => setSourceType(v as 'Propagation Batch' | 'Purchase Order' | '')}
-              options={[
-                { value: 'Propagation Batch', label: 'Propagation Batch' },
-                { value: 'Purchase Order', label: 'Purchase Order' },
-              ]}
-              searchable={false}
-              placeholder="Where do the seedlings come from?"
-            />
-            <View style={{ height: spacing.md }} />
-
-            <Dropdown
-              label="Reason"
-              value={reason}
-              onChange={setReason}
-              options={REPLANT_REASONS.map((r) => ({ value: r, label: r }))}
-              searchable={false}
-              placeholder="Pick a reason"
-            />
-
-            <View style={{ height: spacing.md }} />
-            <Text style={s.fieldLabel}>Remarks (optional)</Text>
-            <TextInput
-              value={remarks}
-              onChangeText={setRemarks}
-              multiline
-              numberOfLines={3}
-              placeholder="Anything worth noting"
-              placeholderTextColor={colors.textMuted}
-              style={s.textarea}
-            />
-
-            <View style={{ height: spacing.md }} />
-            <Button label="Submit replant" loading={acting} onPress={submit} />
-          </KeyboardAwareScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 /* ─── Sheet header ─────────────────────────────────────────────────────── */
 
 function SheetHeader({
@@ -763,18 +446,4 @@ const s = StyleSheet.create({
   detailValue: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text, marginTop: 2 },
 
   row2: { flexDirection: 'row', gap: spacing.md },
-
-  fieldLabel: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.sm },
-  textarea: {
-    fontFamily: fontFamily.regular,
-    fontSize: fontSize.md,
-    color: colors.text,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
 });

@@ -14,14 +14,6 @@ import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme
 import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import { type BedConfigInput } from '@/src/services/crop-cycle';
 
-function todayIso(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 interface BedRow {
   fromBed: string;
   toBed: string;
@@ -50,7 +42,7 @@ export default function NewCropCycleScreen() {
   const [greenhouse, setGreenhouse] = useState(prefillGreenhouse);
   const [plantsPerSqm, setPlantsPerSqm] = useState('');
   const [beds, setBeds] = useState<BedRow[]>([emptyBed()]);
-  const [plantingDate, setPlantingDate] = useState(todayIso());
+  const [plantingDate, setPlantingDate] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -99,6 +91,11 @@ export default function NewCropCycleScreen() {
 
     if (bedPayload.length === 0) {
       toast.showError('Add at least one bed range (variety + bed numbers).');
+      return;
+    }
+
+    if (!plantingDate) {
+      toast.showError('Select a planting date.');
       return;
     }
 

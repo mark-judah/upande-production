@@ -20,16 +20,23 @@ import { useToast } from '@/src/components/Toast';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useGreenhouseSpecsStore } from '@/src/stores/greenhouseSpecsStore';
 import { useAuthStore } from '@/src/stores/authStore';
+import type { GreenhouseSpec } from '@/src/services/greenhouse-specs';
 
 const MANAGE_ROLE = 'Production Section Head';
 
 export default function GreenhouseSpecDetail() {
   const params = useLocalSearchParams<{ greenhouse: string }>();
-  const greenhouse = decodeURIComponent(String(params.greenhouse ?? ''));
+  // The route segment can carry several greenhouse names joined by commas —
+  // the list screen's "View" action does this when more than one greenhouse
+  // is selected. A single name still works exactly as before.
+  const raw = decodeURIComponent(String(params.greenhouse ?? ''));
+  const names = raw.split(',').filter(Boolean);
+  const namesKey = names.join(',');
+  const isMulti = names.length > 1;
   const router = useRouter();
   const toast = useToast();
 
-  const spec = useGreenhouseSpecsStore((s) => s.spec);
+  const specs = useGreenhouseSpecsStore((s) => s.specs);
   const loading = useGreenhouseSpecsStore((s) => s.specLoading);
   const error = useGreenhouseSpecsStore((s) => s.specError);
   const loadSpec = useGreenhouseSpecsStore((s) => s.loadSpec);
@@ -47,14 +54,20 @@ export default function GreenhouseSpecDetail() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    loadSpec(greenhouse);
-  }, [greenhouse, loadSpec]);
+    loadSpec(namesKey ? namesKey.split(',') : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [namesKey, loadSpec]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadSpec(greenhouse);
+    await loadSpec(names);
     setRefreshing(false);
   };
+
+  // Growers are added/removed one greenhouse at a time (that's how the
+  // backend mutation works), so management only applies when exactly one
+  // greenhouse is in view.
+  const single: GreenhouseSpec | null = !isMulti ? specs[0] ?? null : null;
 
   const openAdd = () => {
     setSearch('');
@@ -68,7 +81,8 @@ export default function GreenhouseSpecDetail() {
   };
 
   const onPick = async (employee: string) => {
-    const r = await addGrower(employee);
+    if (!single) return;
+    const r = await addGrower(employee, single.name);
     if (r.ok) {
       toast.showSuccess(r.message);
       setSheetOpen(false);
@@ -78,12 +92,31 @@ export default function GreenhouseSpecDetail() {
   };
 
   const onRemove = async (employee: string) => {
-    const r = await removeGrower(employee);
+    if (!single) return;
+    const r = await removeGrower(employee, single.name);
     if (r.ok) toast.showSuccess(r.message);
     else toast.showError(r.error);
   };
 
-  const growerEmployees = new Set((spec?.growers ?? []).map((g) => g.employee));
+  const growerEmployees = new Set((single?.growers ?? []).map((g) => g.employee));
+
+  const headerTitle = isMulti
+    ? `${names.length} greenhouses`
+    : single?.label || names[0] || '';
+
+  // Rollup across the selected greenhouses, shown above the per-greenhouse
+  // breakdown when more than one is selected.
+  const totals = isMulti
+    ? specs.reduce(
+        (acc, sp) => ({
+          beds: acc.beds + sp.totalBeds,
+          area: acc.area + sp.totalPlantedArea,
+          plants: acc.plants + sp.numberOfPlants,
+          varieties: acc.varieties + sp.varietyCount,
+        }),
+        { beds: 0, area: 0, plants: 0, varieties: 0 },
+      )
+    : null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -92,7 +125,7 @@ export default function GreenhouseSpecDetail() {
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={s.headerTitle} numberOfLines={1}>
-          {spec?.label || greenhouse}
+          {headerTitle}
         </Text>
         <View style={s.headerBtn} />
       </View>
@@ -101,36 +134,53 @@ export default function GreenhouseSpecDetail() {
         contentContainerStyle={s.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {loading && !spec ? (
+        {loading && specs.length === 0 ? (
           <Card>
             <Spinner label="Loading spec…" />
           </Card>
         ) : error ? (
           <Alert tone="danger">{error}</Alert>
-        ) : !spec ? (
+        ) : specs.length === 0 ? (
           <Card>
             <Alert tone="info">Not found.</Alert>
           </Card>
-        ) : (
+        ) : isMulti ? (
           <>
-            <Text style={s.farm}>{spec.farm || '—'}</Text>
+            {totals ? (
+              <Card title="Combined totals">
+                <View style={s.kpis}>
+                  <Pill label="Beds" value={String(totals.beds)} />
+                  <Pill label="Planted m²" value={Math.round(totals.area).toLocaleString()} />
+                  <Pill label="Varieties" value={String(totals.varieties)} />
+                  <Pill label="Plants" value={totals.plants.toLocaleString()} />
+                </View>
+              </Card>
+            ) : null}
+
+            {specs.map((sp) => (
+              <GreenhouseSpecCard key={sp.name} spec={sp} />
+            ))}
+          </>
+        ) : single ? (
+          <>
+            <Text style={s.farm}>{single.farm || '—'}</Text>
 
             {/* KPI overview */}
             <View style={s.kpis}>
-              <Pill label="Beds" value={String(spec.totalBeds)} />
-              <Pill label="Planted m²" value={Math.round(spec.totalPlantedArea).toLocaleString()} />
-              <Pill label="Varieties" value={String(spec.varietyCount)} />
-              <Pill label="Plants" value={spec.numberOfPlants.toLocaleString()} />
+              <Pill label="Beds" value={String(single.totalBeds)} />
+              <Pill label="Planted m²" value={Math.round(single.totalPlantedArea).toLocaleString()} />
+              <Pill label="Varieties" value={String(single.varietyCount)} />
+              <Pill label="Plants" value={single.numberOfPlants.toLocaleString()} />
             </View>
 
-            {!spec.hasCycle ? (
+            {!single.hasCycle ? (
               <Alert tone="info">
                 Nothing is standing in this greenhouse yet. Plant a crop cycle to build its ledger.
               </Alert>
             ) : null}
 
             {/* Varieties grown */}
-            {spec.varieties.length > 0 ? (
+            {single.varieties.length > 0 ? (
               <Card title="Varieties grown">
                 <View style={[s.trow, s.thead]}>
                   <Text style={[s.th, { flex: 2 }]}>Variety</Text>
@@ -138,7 +188,7 @@ export default function GreenhouseSpecDetail() {
                   <Text style={[s.th, s.numCol]}>Plants</Text>
                   <Text style={[s.th, s.areaCol]}>Area m²</Text>
                 </View>
-                {spec.varieties.map((v, i) => (
+                {single.varieties.map((v, i) => (
                   <View key={v.variety + i} style={s.trow}>
                     <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>
                       {v.variety}
@@ -152,7 +202,7 @@ export default function GreenhouseSpecDetail() {
             ) : null}
 
             {/* Bed ledger breakdown (from the Greenhouse doctype) */}
-            {spec.bedSummary.length > 0 ? (
+            {single.bedSummary.length > 0 ? (
               <Card title="Bed status">
                 <View style={[s.trow, s.thead]}>
                   <Text style={[s.th, { flex: 2 }]}>Status</Text>
@@ -160,7 +210,7 @@ export default function GreenhouseSpecDetail() {
                   <Text style={[s.th, s.numCol]}>Plants</Text>
                   <Text style={[s.th, s.areaCol]}>Area m²</Text>
                 </View>
-                {spec.bedSummary.map((b, i) => (
+                {single.bedSummary.map((b, i) => (
                   <View key={b.status + i} style={s.trow}>
                     <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>{b.status}</Text>
                     <Text style={[s.td, s.numCol]}>{b.beds}</Text>
@@ -172,7 +222,7 @@ export default function GreenhouseSpecDetail() {
             ) : null}
 
             {/* Bays (legacy — never populated by the new model) */}
-            {spec.bays.length > 0 ? (
+            {single.bays.length > 0 ? (
               <Card title="Bays">
                 <View style={[s.trow, s.thead]}>
                   <Text style={[s.th, { flex: 2 }]}>Bay</Text>
@@ -180,7 +230,7 @@ export default function GreenhouseSpecDetail() {
                   <Text style={[s.th, s.numCol]}>Beds</Text>
                   <Text style={[s.th, s.areaCol]}>Area m²</Text>
                 </View>
-                {spec.bays.map((b, i) => (
+                {single.bays.map((b, i) => (
                   <View key={b.bayNumber + '-' + i} style={s.trow}>
                     <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>
                       {b.bayName || 'Bay ' + b.bayNumber}
@@ -196,11 +246,11 @@ export default function GreenhouseSpecDetail() {
             ) : null}
 
             {/* Growers */}
-            <Card title={'Growers (' + spec.growers.length + ')'}>
-              {spec.growers.length === 0 ? (
+            <Card title={'Growers (' + single.growers.length + ')'}>
+              {single.growers.length === 0 ? (
                 <Text style={s.muted}>No growers assigned.</Text>
               ) : (
-                spec.growers.map((g) => (
+                single.growers.map((g) => (
                   <View key={g.employee} style={s.growerRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={s.growerName}>{g.employeeName}</Text>
@@ -233,7 +283,7 @@ export default function GreenhouseSpecDetail() {
               ) : null}
             </Card>
           </>
-        )}
+        ) : null}
       </ScrollView>
 
       {/* Grower picker */}
@@ -283,6 +333,89 @@ export default function GreenhouseSpecDetail() {
   );
 }
 
+/** Read-only per-greenhouse breakdown used when several greenhouses are
+ *  selected at once. Grower management is intentionally left out here —
+ *  adding/removing a grower is a single-greenhouse action on the backend,
+ *  so it only appears in the single-greenhouse view above. */
+function GreenhouseSpecCard({ spec }: { spec: GreenhouseSpec }) {
+  return (
+    <Card title={spec.label}>
+      <Text style={s.farm}>{spec.farm || '—'}</Text>
+      <View style={s.kpis}>
+        <Pill label="Beds" value={String(spec.totalBeds)} />
+        <Pill label="Planted m²" value={Math.round(spec.totalPlantedArea).toLocaleString()} />
+        <Pill label="Varieties" value={String(spec.varietyCount)} />
+        <Pill label="Plants" value={spec.numberOfPlants.toLocaleString()} />
+      </View>
+
+      {!spec.hasCycle ? (
+        <Alert tone="info">Nothing is standing in this greenhouse yet.</Alert>
+      ) : null}
+
+      {spec.varieties.length > 0 ? (
+        <View style={{ marginTop: spacing.md }}>
+          <Text style={s.subhead}>Varieties grown</Text>
+          <View style={[s.trow, s.thead]}>
+            <Text style={[s.th, { flex: 2 }]}>Variety</Text>
+            <Text style={[s.th, s.numCol]}>Beds</Text>
+            <Text style={[s.th, s.numCol]}>Plants</Text>
+            <Text style={[s.th, s.areaCol]}>Area m²</Text>
+          </View>
+          {spec.varieties.map((v, i) => (
+            <View key={v.variety + i} style={s.trow}>
+              <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>
+                {v.variety}
+              </Text>
+              <Text style={[s.td, s.numCol]}>{v.beds}</Text>
+              <Text style={[s.td, s.numCol]}>{v.plants.toLocaleString()}</Text>
+              <Text style={[s.td, s.areaCol]}>{Math.round(v.area).toLocaleString()}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {spec.bedSummary.length > 0 ? (
+        <View style={{ marginTop: spacing.md }}>
+          <Text style={s.subhead}>Bed status</Text>
+          <View style={[s.trow, s.thead]}>
+            <Text style={[s.th, { flex: 2 }]}>Status</Text>
+            <Text style={[s.th, s.numCol]}>Beds</Text>
+            <Text style={[s.th, s.numCol]}>Plants</Text>
+            <Text style={[s.th, s.areaCol]}>Area m²</Text>
+          </View>
+          {spec.bedSummary.map((b, i) => (
+            <View key={b.status + i} style={s.trow}>
+              <Text style={[s.td, { flex: 2 }]} numberOfLines={1}>{b.status}</Text>
+              <Text style={[s.td, s.numCol]}>{b.beds}</Text>
+              <Text style={[s.td, s.numCol]}>{b.plants.toLocaleString()}</Text>
+              <Text style={[s.td, s.areaCol]}>{Math.round(b.area).toLocaleString()}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: spacing.md }}>
+        <Text style={s.subhead}>{'Growers (' + spec.growers.length + ')'}</Text>
+        {spec.growers.length === 0 ? (
+          <Text style={s.muted}>No growers assigned.</Text>
+        ) : (
+          spec.growers.map((g) => (
+            <View key={g.employee} style={s.growerRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.growerName}>{g.employeeName}</Text>
+                <Text style={s.growerMeta}>
+                  {g.employee}
+                  {g.designation ? ' · ' + g.designation : ''}
+                </Text>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+    </Card>
+  );
+}
+
 const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -303,6 +436,12 @@ const s = StyleSheet.create({
   },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   farm: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary },
+  subhead: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: fontSize.sm,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   trow: {
     flexDirection: 'row',

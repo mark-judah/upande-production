@@ -15,7 +15,11 @@ interface GreenhouseSpecsState {
   error: string | null;
   farmFilter: string;
 
-  spec: GreenhouseSpec | null;
+  /** Greenhouses picked on the list screen (multi-select). */
+  selected: string[];
+
+  /** One spec per selected greenhouse, loaded on the detail screen. */
+  specs: GreenhouseSpec[];
   specLoading: boolean;
   specError: string | null;
 
@@ -25,10 +29,13 @@ interface GreenhouseSpecsState {
 
   load: () => Promise<void>;
   setFarmFilter: (farm: string) => void;
-  loadSpec: (greenhouse: string) => Promise<void>;
+  toggleSelected: (greenhouse: string) => void;
+  setSelected: (greenhouses: string[]) => void;
+  clearSelected: () => void;
+  loadSpec: (greenhouses: string[]) => Promise<void>;
   loadCandidates: (search?: string) => Promise<void>;
-  addGrower: (employee: string) => Promise<Outcome>;
-  removeGrower: (employee: string) => Promise<Outcome>;
+  addGrower: (employee: string, greenhouse: string) => Promise<Outcome>;
+  removeGrower: (employee: string, greenhouse: string) => Promise<Outcome>;
 }
 
 export const useGreenhouseSpecsStore = create<GreenhouseSpecsState>((set, get) => ({
@@ -37,7 +44,9 @@ export const useGreenhouseSpecsStore = create<GreenhouseSpecsState>((set, get) =
   error: null,
   farmFilter: '',
 
-  spec: null,
+  selected: [],
+
+  specs: [],
   specLoading: false,
   specError: null,
 
@@ -48,23 +57,41 @@ export const useGreenhouseSpecsStore = create<GreenhouseSpecsState>((set, get) =
   load: async () => {
     set({ loading: true, error: null });
     try {
-      const greenhouses = await greenhouseSpecApi.list({ farm: get().farmFilter });
+      // Always fetch the full, unfiltered list. The farm filter is applied
+      // client-side (see greenhouse-specs.tsx) so the "Farm" dropdown's own
+      // options — derived from this same list — never shrink to just the
+      // currently-selected farm.
+      const greenhouses = await greenhouseSpecApi.list({});
       set({ greenhouses, loading: false });
     } catch (err) {
       set({ error: mapAxiosError(err).message, loading: false });
     }
   },
 
-  setFarmFilter: (farm) => {
-    set({ farmFilter: farm });
-    get().load();
+  setFarmFilter: (farm) => set({ farmFilter: farm }),
+
+  toggleSelected: (greenhouse) => {
+    const current = get().selected;
+    set({
+      selected: current.includes(greenhouse)
+        ? current.filter((g) => g !== greenhouse)
+        : [...current, greenhouse],
+    });
   },
 
-  loadSpec: async (greenhouse) => {
+  setSelected: (greenhouses) => set({ selected: greenhouses }),
+
+  clearSelected: () => set({ selected: [] }),
+
+  loadSpec: async (greenhouses) => {
+    if (greenhouses.length === 0) {
+      set({ specs: [], specLoading: false, specError: null });
+      return;
+    }
     set({ specLoading: true, specError: null });
     try {
-      const spec = await greenhouseSpecApi.get(greenhouse);
-      set({ spec, specLoading: false });
+      const specs = await greenhouseSpecApi.getMany(greenhouses);
+      set({ specs, specLoading: false });
     } catch (err) {
       set({ specError: mapAxiosError(err).message, specLoading: false });
     }
@@ -80,13 +107,12 @@ export const useGreenhouseSpecsStore = create<GreenhouseSpecsState>((set, get) =
     }
   },
 
-  addGrower: async (employee) => {
-    const gh = get().spec?.name;
-    if (!gh) return { ok: false, error: 'No greenhouse selected.' };
+  addGrower: async (employee, greenhouse) => {
+    if (!greenhouse) return { ok: false, error: 'No greenhouse selected.' };
     set({ acting: true });
     try {
-      const r = await greenhouseSpecApi.setGrower(employee, gh, 'add');
-      await get().loadSpec(gh);
+      const r = await greenhouseSpecApi.setGrower(employee, greenhouse, 'add');
+      await get().loadSpec(get().specs.map((s) => s.name));
       set({ acting: false });
       return { ok: true, message: r.status === 'exists' ? 'Already a grower here.' : 'Grower added.' };
     } catch (err) {
@@ -95,13 +121,12 @@ export const useGreenhouseSpecsStore = create<GreenhouseSpecsState>((set, get) =
     }
   },
 
-  removeGrower: async (employee) => {
-    const gh = get().spec?.name;
-    if (!gh) return { ok: false, error: 'No greenhouse selected.' };
+  removeGrower: async (employee, greenhouse) => {
+    if (!greenhouse) return { ok: false, error: 'No greenhouse selected.' };
     set({ acting: true });
     try {
-      await greenhouseSpecApi.setGrower(employee, gh, 'remove');
-      await get().loadSpec(gh);
+      await greenhouseSpecApi.setGrower(employee, greenhouse, 'remove');
+      await get().loadSpec(get().specs.map((s) => s.name));
       set({ acting: false });
       return { ok: true, message: 'Grower removed.' };
     } catch (err) {

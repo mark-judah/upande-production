@@ -54,11 +54,18 @@ export default function FieldRejectsScreen() {
 function NewFieldRejectSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { showSuccess, showError } = useToast();
   const greenhouses = useCropCycleStore((st) => st.greenhouses);
-  const varieties = useCropCycleStore((st) => st.varieties);
   const farms = useCropCycleStore((st) => st.farms);
   const rejectionReasons = useCropCycleStore((st) => st.rejectionReasons);
   const acting = useFieldRejectsStore((st) => st.acting);
   const submit = useFieldRejectsStore((st) => st.submit);
+
+  // Varieties are scoped to the selected greenhouse and come from the real
+  // Item master (via getGreenhouseData — the same endpoint the known-correct
+  // Harvesting screen uses), not a narrow, separately-configured allow-list.
+  const varieties = useFieldRejectsStore((st) => st.varieties);
+  const varietiesLoading = useFieldRejectsStore((st) => st.varietiesLoading);
+  const loadVarietiesForGreenhouse = useFieldRejectsStore((st) => st.loadVarietiesForGreenhouse);
+  const resetVarieties = useFieldRejectsStore((st) => st.resetVarieties);
 
   const [variety, setVariety] = useState('');
   const [farm, setFarm] = useState('');
@@ -66,12 +73,25 @@ function NewFieldRejectSheet({ visible, onClose }: { visible: boolean; onClose: 
   const [stems, setStems] = useState('');
   const [reason, setReason] = useState('');
 
+  // Greenhouse picks its own varieties -- clear + refetch whenever it changes,
+  // same cascade as the Harvesting screen.
+  useEffect(() => {
+    setVariety('');
+    if (greenhouse) {
+      loadVarietiesForGreenhouse(greenhouse);
+    } else {
+      resetVarieties();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [greenhouse]);
+
   const reset = () => {
     setVariety('');
     setFarm('');
     setGreenhouse('');
     setStems('');
     setReason('');
+    resetVarieties();
   };
 
   const onSubmit = async () => {
@@ -104,15 +124,6 @@ function NewFieldRejectSheet({ visible, onClose }: { visible: boolean; onClose: 
     <Sheet visible={visible} onClose={onClose} title="New field rejection" hideCloseButton>
       <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
         <Dropdown
-          label="Variety"
-          value={variety}
-          onChange={setVariety}
-          options={varieties.map((v) => ({ value: v.name, label: v.label }))}
-          placeholder="Pick the rose variety"
-        />
-        <View style={{ height: spacing.md }} />
-
-        <Dropdown
           label="Farm"
           value={farm}
           onChange={setFarm}
@@ -127,6 +138,24 @@ function NewFieldRejectSheet({ visible, onClose }: { visible: boolean; onClose: 
           onChange={setGreenhouse}
           options={greenhouses.map((g) => ({ value: g.name, label: g.label }))}
           placeholder="Pick the greenhouse"
+        />
+        <View style={{ height: spacing.md }} />
+
+        {/* Scoped to the selected greenhouse — real Items standing in it
+            (via getGreenhouseData), not a separate narrow allow-list. */}
+        <Dropdown
+          label="Variety"
+          value={variety}
+          onChange={setVariety}
+          options={varieties.map((v) => ({ value: v.name, label: v.label }))}
+          placeholder={
+            !greenhouse
+              ? 'Pick a greenhouse first'
+              : varietiesLoading
+                ? 'Loading…'
+                : 'Pick the rose variety'
+          }
+          disabled={!greenhouse || varietiesLoading}
         />
         <View style={{ height: spacing.md }} />
 

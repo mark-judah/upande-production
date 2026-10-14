@@ -149,6 +149,13 @@ export const greenhouseSpecApi = {
     return toSpec(body.data ?? {});
   },
 
+  /** Fetch specs for several greenhouses at once (the endpoint itself only
+   *  takes one `greenhouse`, so this fans out in parallel). Used by the
+   *  multi-greenhouse selection on the Greenhouse Specs screen. */
+  async getMany(greenhouses: string[]): Promise<GreenhouseSpec[]> {
+    return Promise.all(greenhouses.map((g) => greenhouseSpecApi.get(g)));
+  },
+
   async listGrowerCandidates(search?: string): Promise<GrowerCandidate[]> {
     const body = await api<CandidatesResponse>({
       method: 'POST',

@@ -82,7 +82,7 @@ export const REPLANT_REASONS = [
 export interface PickerOption {
   name: string;
   label: string;
-  /** Farm the greenhouse belongs to (when returned by productionListGreenhouses). */
+  /** Farm the greenhouse belongs to (when returned by productionListGreenhouseSpecs). */
   farm?: string;
   /** Stock UOM (when returned by productionListVarieties) — a Harvest task's
    *  target is a quantity of this variety, in this unit (e.g. "Stems"). */
@@ -211,9 +211,13 @@ export const cropCycleApi = {
   },
 
   async listGreenhouses(opts?: { search?: string; farm?: string }): Promise<PickerOption[]> {
+    // productionListGreenhouses matched warehouses by a "name contains GH"
+    // heuristic, which misses/mismatches real greenhouses. The Greenhouse
+    // Specs screen resolves greenhouses correctly — Warehouse records with
+    // warehouse_type == "Greenhouse" — so pickers use that same endpoint.
     const body = await api<PickerResponse>({
       method: 'POST',
-      url: '/api/method/upande_agriculture.mobile.api.productionListGreenhouses',
+      url: '/api/method/upande_agriculture.mobile.api.productionListGreenhouseSpecs',
       data: { search: opts?.search ?? '', farm: opts?.farm ?? '', limit: 300 },
     });
     return body.data?.greenhouses ?? [];
