@@ -2,7 +2,7 @@
   "expo": {
     "name": "Upande Production",
     "slug": "upande-production",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "platforms": [
       "ios",
       "android"
@@ -32,7 +32,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "versionCode": 105001
+      "versionCode": 105100
     },
     "plugins": [
       "./plugins/withReleaseSigning",
@@ -75,7 +75,7 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "runtimeVersion": "101.0",
+    "runtimeVersion": "101.1",
     "extra": {
       "router": {},
       "eas": {
@@ -86,7 +86,7 @@
     },
     "updates": {
       "enabled": true,
-      "url": "https://mark-judah.github.io/upande-production/ota/android/101.0/manifest.json",
+      "url": "https://mark-judah.github.io/upande-production/ota/android/101.1/manifest.json",
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     }
