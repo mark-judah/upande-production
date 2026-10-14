@@ -74,12 +74,28 @@ jobs:
       # Planned before it is applied: the plan compares the new version's
       # runtime (major.minor) against the one currently in app.json, and that
       # is what decides between an OTA update and an APK.
+      # An OTA only carries JS, so anything that changes the native build (dependencies,
+      # app.json, config plugins, patches, or an explicit [apk] in a commit message since the
+      # last release) must ship as a new APK: auto promotes a patch to a minor. A manual
+      # `bump` choice always wins. See scripts/lib/native-change.mjs.
+      - name: Detect native changes
+        id: native
+        run: |
+          set -euo pipefail
+          node scripts/detect-native.mjs | tee native.json
+          {
+            echo "native=$(jq -r .native native.json)"
+            echo "reason=$(jq -r .reason native.json)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Plan and apply the version bump
         id: version
         run: |
           set -euo pipefail
           bump="${{ github.event.inputs.bump || 'auto' }}"
-          [ "$bump" = "auto" ] && bump=patch
+          if [ "$bump" = "auto" ]; then
+            if [ "${{ steps.native.outputs.native }}" = "true" ]; then bump=minor; else bump=patch; fi
+          fi
           set_version="${{ github.event.inputs.set_version }}"
           to=(--bump "$bump")
           [ -n "$set_version" ] && to=(--set "$set_version")
@@ -273,7 +289,7 @@ jobs:
           retention-days: 90
 
       - name: Remove the generated native project before committing
-        run: rm -rf android version.json ota .ota-export
+        run: rm -rf android version.json native.json ota .ota-export
 
       - name: Commit and tag the version bump
         env:
@@ -372,6 +388,7 @@ jobs:
           {
             echo "### Released \`${{ steps.version.outputs.tag }}\`"
             echo
+            echo "- Why this release type: ${{ steps.native.outputs.reason }}"
             echo "- Runtime \`${{ steps.version.outputs.runtime }}\`, versionCode \`${{ steps.version.outputs.version_code }}\`"
             if [ "${{ steps.version.outputs.release }}" = "ota" ]; then
               echo "- Shipped as a JS update on GitHub Pages: https://mark-judah.github.io/upande-production/ota/android/${{ steps.version.outputs.runtime }}/manifest.json (no APK)"
