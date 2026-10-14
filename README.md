@@ -54,3 +54,7 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Releases and updates
+
+See [docs/RELEASING.md](docs/RELEASING.md): odometer versioning, OTA updates, APK builds, the minimum-version gate and the Support Team *Install Stats* page.
