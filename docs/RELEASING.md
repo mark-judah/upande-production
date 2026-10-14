@@ -24,9 +24,25 @@ runtimeVersion = (100 + major).minor                          1.0.x → "101.0",
 
 * **Patch release** (`1.0.5 → 1.0.6`): same runtime → JS-only update, installed `101.0`
   APKs pick it up.
-* **New minor/major** (or any Expo SDK change): new runtime → a new APK. Run the
-  **Release** workflow manually with `minor`/`major` whenever a change touches native
-  code (new native package, config plugin, permissions, anything `app.json` bakes in).
+* **New minor/major** (or any Expo SDK change): new runtime → a new APK.
+
+**The workflow chooses between the two for you.** Before planning the version it
+compares the code with the last released tag (`scripts/detect-native.mjs`). It promotes
+the release from a patch to a **minor (new APK)** when the changes since then include:
+
+| Change | Why it needs an APK |
+| --- | --- |
+| `dependencies` in `package.json` added, removed or upgraded | a package may carry native code (devDependencies and scripts are ignored) |
+| `app.json` edited (permissions, plugins, package name, ...) | baked into the Android manifest by prebuild; the version fields the bot writes are ignored |
+| anything in `plugins/` or `patches/`, or `eas.json` | changes the native build |
+| `[apk]` anywhere in a commit message | explicit override for anything the rules cannot see |
+
+Everything else stays a patch OTA. The check is deliberately conservative: a JS-only
+dependency bump also builds an APK (15 minutes) rather than risk shipping a JS bundle to
+phones whose native side does not match. The reason is printed in the run summary
+(*Why this release type*) and in the PR's *Version impact* table, so you see it before
+merging. A manual **Run workflow** choice (`patch`/`minor`/`major`/`set_version`) always
+overrides the automatic one.
 
 Commit style does not affect the version. A `feat:`/`fix:` prefix only groups the
 release notes. Preview locally: `npm run version:next`, `npm run version:notes`.

@@ -32,3 +32,21 @@ test('release notes for latest.json come from the notes file, not from git after
   assert.match(run, /RELEASE_NOTES\.md/);
   assert.doesNotMatch(run, /version\.mjs/);
 });
+
+test('native changes are detected before the version is planned, and promote auto to minor', () => {
+  const detect = idx('Detect native changes');
+  const plan = idx('Plan and apply the version bump');
+  assert.ok(detect > -1 && detect < plan, 'detect runs before the plan');
+  const run = steps[plan].run;
+  assert.match(run, /steps\.native\.outputs\.native/);
+  assert.match(run, /bump=minor/);
+  // an explicit manual choice always wins over the automatic one
+  assert.match(run, /\[ "\$bump" = "auto" \]/);
+});
+
+test('the PR version preview uses the same detection', () => {
+  const pr = yaml.load(readFileSync(new URL('../.github/workflows/pr.yml', import.meta.url), 'utf8'));
+  const text = JSON.stringify(pr.jobs.version.steps);
+  assert.match(text, /detect-native\.mjs/);
+  assert.match(text, /--bump/);
+});

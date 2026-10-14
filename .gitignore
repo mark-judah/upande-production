@@ -51,3 +51,4 @@ SECRETS-TO-UPLOAD.txt
 version.json
 RELEASE_NOTES.md
 ota-meta/
+native.json
