@@ -11,6 +11,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useNetworkStore } from '@/src/stores/networkStore';
 import { startTelemetry } from '@/src/services/telemetry/service';
+import { UpdateProvider } from '@/src/services/updates/UpdateProvider';
 
 // Hold the native splash until fonts + auth hydrated.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -74,6 +75,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <ToastProvider>
+        <UpdateProvider>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -96,6 +98,7 @@ export default function RootLayout() {
         <DrawerMenu />
         {/* Sticky offline indicator across all screens. */}
         <OfflineBanner />
+        </UpdateProvider>
       </ToastProvider>
     </SafeAreaProvider>
   );

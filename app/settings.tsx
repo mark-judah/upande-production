@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Updates from 'expo-updates';
-import Constants from 'expo-constants';
 import { Screen } from '@/src/components/Screen';
 import { Card } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { useToast } from '@/src/components/Toast';
 import { useAuthStore } from '@/src/stores/authStore';
 import * as Biometric from '@/src/services/biometric';
+import { ApkUpdateSection } from '@/src/services/updates/ApkUpdateSection';
+import { APP_VERSION, RUNTIME_VERSION } from '@/src/services/version';
 import { colors, fontFamily, fontSize, spacing } from '@/src/theme';
 
 export default function SettingsScreen() {  
@@ -23,47 +23,14 @@ export default function SettingsScreen() {
   const { showSuccess, showError } = useToast();
   const [moduleReady, setModuleReady] = useState(false);
   const [hardwareReady, setHardwareReady] = useState(false);
-  const [updatesChecking, setUpdatesChecking] = useState(false);
 
   useEffect(() => {
     setModuleReady(Biometric.isModuleAvailable());
     Biometric.isAvailable().then(setHardwareReady);
   }, []);
 
-  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
-  const runtimeVersion = Updates.runtimeVersion || appVersion;
-
-  const onCheckUpdates = async () => {
-    if (__DEV__) {
-      showError('OTA updates are unavailable in development. Use a production build.');
-      return;
-    }
-    setUpdatesChecking(true);
-    try {
-      const result = await Updates.checkForUpdateAsync();
-      if (!result.isAvailable) {
-        showSuccess("You're on the latest version.");
-        return;
-      }
-      const fetched = await Updates.fetchUpdateAsync();
-      if (fetched.isNew) {
-        Alert.alert(
-          'Update ready',
-          'A new version has been downloaded. Reload now to apply it?',
-          [
-            { text: 'Later', style: 'cancel' },
-            { text: 'Reload', onPress: () => Updates.reloadAsync() },
-          ],
-        );
-      } else {
-        showSuccess("You're on the latest version.");
-      }
-    } catch (err) {
-      showError(err instanceof Error ? err.message : 'Could not check for updates.');
-    } finally {
-      setUpdatesChecking(false);
-    }
-  };
+  const appVersion = APP_VERSION;
+  const runtimeVersion = RUNTIME_VERSION;
 
   const onToggleBiometric = async () => {
     if (!biometricEnabled) {
@@ -175,13 +142,7 @@ export default function SettingsScreen() {
           </View>
         </View>
         <View style={{ height: spacing.md }} />
-        <Button
-          label={updatesChecking ? 'Checking…' : 'Check for updates'}
-          variant="outline"
-          onPress={onCheckUpdates}
-          loading={updatesChecking}
-          iconLeft="cloud-download-outline"
-        />
+        <ApkUpdateSection />
       </Card>
 
       <Card title="Session">
