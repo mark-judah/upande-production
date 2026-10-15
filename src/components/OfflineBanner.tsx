@@ -46,7 +46,7 @@ export function OfflineBanner() {
       <View style={s.banner}>
         <Ionicons name="cloud-offline-outline" size={16} color={colors.textOnPrimary} />
         <Text style={s.text} numberOfLines={1}>
-          You're offline — check your network connection
+          You&apos;re offline — check your network connection
         </Text>
       </View>
     </Animated.View>

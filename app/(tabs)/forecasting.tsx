@@ -170,7 +170,7 @@ export default function ForecastingScreen() {
         ) : greenhouses.length === 0 ? (
           <Text style={s.emptyText}>No greenhouses available</Text>
         ) : filteredGreenhouses.length === 0 ? (
-          <Text style={s.emptyText}>No greenhouse matches "{search}"</Text>
+          <Text style={s.emptyText}>No greenhouse matches &quot;{search}&quot;</Text>
         ) : (
           filteredGreenhouses.map((gh) => (
             <TouchableOpacity
@@ -373,7 +373,7 @@ function MenuSheet({
           </TouchableOpacity>
           <TouchableOpacity style={s.menuItem} onPress={onGoToLastWeek}>
             <Ionicons name="time-outline" size={18} color={colors.text} />
-            <Text style={s.menuItemText}>Review last week's variance</Text>
+            <Text style={s.menuItemText}>Review last week&apos;s variance</Text>
           </TouchableOpacity>
         </View>
       </View>
