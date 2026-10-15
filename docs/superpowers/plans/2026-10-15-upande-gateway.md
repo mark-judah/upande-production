@@ -552,7 +552,15 @@ class IntegrationTestDispatch(IntegrationTestCase):
 
 	def call_as(self, route, **kwargs):
 		frappe.local.form_dict = frappe._dict(cmd=route, **kwargs)
-		frappe.response = frappe._dict()
+		# Reset to a non-empty dict, not frappe._dict() (empty). safe_exec's
+		# get_safe_globals() only wires frappe.response into the sandbox
+		# under `if frappe.response:` — a truthiness check — so a bare empty
+		# dict here would make an Override Server Script's own
+		# `frappe.response["message"] = ...` line fail with a RestrictedPython
+		# write error. A real request's frappe.response is never empty for
+		# the same reason this must not be either. `docs: []` matches its
+		# real default shape.
+		frappe.response = frappe._dict(docs=[])
 		return resolve_and_call(**frappe.local.form_dict)
 
 	def test_no_gateway_route_fails_open_to_original(self):
