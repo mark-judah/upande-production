@@ -1481,14 +1481,28 @@ Add these two test methods to the existing `IntegrationTestGatewayRoute` class
 		doctype_event_script.script = "pass"
 		doctype_event_script.insert(ignore_permissions=True)
 
-		route = frappe.new_doc("Gateway Route")
-		route.name = "test.gateway.route.wrong_script_type"
-		route.mode = "Override"
-		route.override_script = doctype_event_script.name
-		with self.assertRaises(frappe.ValidationError):
-			route.insert(ignore_permissions=True)
+		try:
+			route = frappe.new_doc("Gateway Route")
+			route.name = "test.gateway.route.wrong_script_type"
+			route.mode = "Override"
+			route.override_script = doctype_event_script.name
+			with self.assertRaises(frappe.ValidationError):
+				route.insert(ignore_permissions=True)
+		finally:
+			# A DocType Event script bound to (Gateway Route, Before Save)
+			# populates Frappe's own server_script_map cache, which is only
+			# invalidated by ServerScript.on_trash() — never by tearDown's
+			# raw frappe.db.delete() for Server Script. Left stale, this
+			# script would keep "running" (as a cache-map entry) before
+			# EVERY later Gateway Route save in this process, in this file
+			# and others. Delete it through the real ORM path, right here,
+			# so on_trash actually fires — don't rely on the shared
+			# tearDown's raw-SQL sweep for this one cache-sensitive doc.
+			frappe.delete_doc("Server Script", doctype_event_script.name, ignore_permissions=True)
 
 	def test_delete_busts_cache(self):
+		from upande_gateway.upande_gateway.doctype.gateway_route.gateway_route import cache_key
+
 		route = frappe.new_doc("Gateway Route")
 		route.name = "test.gateway.route.delete_cachebust"
 		route.mode = "Normal"
@@ -1500,10 +1514,9 @@ Add these two test methods to the existing `IntegrationTestGatewayRoute` class
 		self.assertIsNone(frappe.cache().get_value(cache_key(route.name)))
 ```
 
-(`test_override_script_must_be_api_type`'s Server Script is cleaned up by
-the existing `tearDown`'s `"GW Test Script%"` pattern already in this file
-— no tearDown change needed. `cache_key` is already imported in this file's
-existing `test_save_busts_cache` test.)
+(`test_delete_busts_cache` imports `cache_key` locally, matching this
+file's existing per-method import convention in `test_save_busts_cache`
+— there is no module-level import of it in this file.)
 
 ### Verification
 
