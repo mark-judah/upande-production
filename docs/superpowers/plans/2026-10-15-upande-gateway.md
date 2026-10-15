@@ -988,6 +988,536 @@ git -C /home/jk/Projects/upande-local-bench-v16/apps/upande_gateway commit -m "t
 
 ---
 
+## Task 6: Final-review fixes (access-control parity + smaller gaps)
+
+The final whole-branch review (after Tasks 1-5 were each individually
+reviewed and approved) found two real, load-bearing gaps that only show up
+across the whole mechanism, plus several smaller real issues. All are
+fixed here, verified against this bench's installed Frappe v16.50.0 source
+before being written below — see spec §4.2.1, §7, §8 (updated) for the
+design-level explanation.
+
+**Files:**
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/dispatch.py`
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/upande_gateway/doctype/gateway_route/gateway_route.py`
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/upande_gateway/doctype/gateway_route/gateway_route.js`
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/api.py`
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/hooks.py`
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/tests/test_dispatch.py`
+- Modify: `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gateway/upande_gateway/doctype/gateway_route/test_gateway_route.py`
+
+### C1 + I1: `dispatch.py` — access-control parity and `cmd` registration check
+
+Replace the file's full content with:
+
+```python
+import frappe
+import frappe.handler
+
+from upande_gateway.upande_gateway.doctype.gateway_route.gateway_route import cache_key
+
+
+def _get_route_state(route: str) -> dict:
+	cache = frappe.cache()
+	key = cache_key(route)
+	cached = cache.get_value(key)
+	if cached is not None:
+		return cached
+
+	state = (
+		frappe.db.get_value("Gateway Route", route, ["mode", "override_script"], as_dict=True)
+		or {}
+	)
+	cache.set_value(key, state, expires_in_sec=300)
+	return state
+
+
+def _is_registered_to_this_dispatcher(route: str) -> bool:
+	overrides = frappe.get_hooks("override_whitelisted_methods", {}).get(route, [])
+	return bool(overrides) and overrides[-1] == "upande_gateway.dispatch.resolve_and_call"
+
+
+@frappe.whitelist(allow_guest=True)
+def resolve_and_call(**kwargs):
+	"""Shared target for every route protected via `override_whitelisted_methods`.
+
+	Frappe still carries the client's originally-requested dotted path on
+	`frappe.form_dict.cmd` even once dispatch has been overridden
+	(`frappe/handler.py:68` reassigns only the local `cmd` variable inside
+	`execute_cmd`, never `frappe.local.form_dict.cmd` itself) — confirmed
+	against this bench's installed frappe v16.50.0 source, not assumed.
+
+	This function is itself whitelisted with no method restriction and
+	`allow_guest=True` because it must be reachable regardless of which
+	protected route's request it's serving — but it must NOT let every
+	protected route silently inherit that wide-open policy. It re-checks
+	the REAL original function's own whitelist/guest/HTTP-method policy
+	before dispatching either branch (see spec §4.2.1).
+
+	It also refuses any `cmd` that isn't genuinely registered to this
+	dispatcher: `cmd` is not reliably "the route this call is for" —
+	`frappe.utils.safe_exec.call_whitelisted_function` (the helper Server
+	Script event scripts use to call another whitelisted function) can
+	re-enter `execute_cmd` with an OUTER request's stale `cmd` still in
+	`form_dict`, which would otherwise make this function blindly
+	re-execute the wrong function (e.g. re-running a document save).
+	"""
+	route = frappe.form_dict.get("cmd")
+	if not route:
+		frappe.throw("upande_gateway.dispatch.resolve_and_call was called without a cmd")
+
+	if not _is_registered_to_this_dispatcher(route):
+		frappe.throw(
+			f"upande_gateway.dispatch.resolve_and_call is not registered for {route}",
+			frappe.PermissionError,
+		)
+
+	original = frappe.get_attr(route)
+	frappe.is_whitelisted(original)
+	frappe.handler.is_valid_http_method(original)
+
+	state = _get_route_state(route)
+
+	if state.get("mode") == "Override" and state.get("override_script"):
+		script_doc = frappe.get_doc("Server Script", state["override_script"])
+		if script_doc.disabled:
+			# A disabled hotfix script is the natural kill switch during an
+			# incident: fail safe back to Normal rather than silently doing
+			# nothing or hard-erroring.
+			return frappe.call(original, **frappe.form_dict)
+		# Mirrors frappe/handler.py:90-97 exactly: some scripts return output
+		# via frappe.flags (non-empty dict), others set frappe.response
+		# directly and return {} — don't overwrite frappe.response in that case.
+		response = script_doc.execute_method()
+		if response != {}:
+			return response
+		return
+
+	return frappe.call(original, **frappe.form_dict)
+```
+
+### I2 + I4 + I5: `gateway_route.py` — script_type validation, registration warning, `on_trash`
+
+Replace the file's full content with:
+
+```python
+import frappe
+from frappe.model.document import Document
+
+
+def cache_key(route: str) -> str:
+	return f"upande_gateway:route:{route}"
+
+
+class GatewayRoute(Document):
+	def validate(self):
+		if self.mode == "Override" and not self.override_script:
+			frappe.throw("Override Script is required when Mode is Override.")
+
+		if self.override_script:
+			script_type = frappe.db.get_value("Server Script", self.override_script, "script_type")
+			if script_type != "API":
+				frappe.throw(
+					f"Override Script must be an API-type Server Script (got {script_type})."
+				)
+
+		overrides = frappe.get_hooks("override_whitelisted_methods", {}).get(self.name, [])
+		if not (overrides and overrides[-1] == "upande_gateway.dispatch.resolve_and_call"):
+			frappe.msgprint(
+				f"{self.name} is not (yet) registered to upande_gateway in any app's "
+				"hooks.py — this route will have no effect until an "
+				"override_whitelisted_methods entry for it is deployed.",
+				indicator="orange",
+				alert=True,
+			)
+
+	def before_save(self):
+		if self.is_new():
+			return
+
+		previous = frappe.db.get_value(
+			"Gateway Route", self.name, ["mode", "override_script"], as_dict=True
+		)
+		if not previous:
+			return
+		if previous.mode == self.mode and previous.override_script == self.override_script:
+			return
+
+		self.append(
+			"gateway_route_log",
+			{
+				"changed_at": frappe.utils.now_datetime(),
+				"changed_by": frappe.session.user,
+				"from_mode": previous.mode,
+				"to_mode": self.mode,
+				"override_script": self.override_script,
+				"note": self.notes,
+			},
+		)
+		self.last_switched_by = frappe.session.user
+		self.last_switched_at = frappe.utils.now_datetime()
+
+	def on_update(self):
+		frappe.cache().delete_value(cache_key(self.name))
+
+	def on_trash(self):
+		frappe.cache().delete_value(cache_key(self.name))
+```
+
+(`before_save`/`on_update` are unchanged from Task 2 — only `validate` gained
+the two new checks and `on_trash` was added.)
+
+### I2 (JS half): `gateway_route.js` — filter the override_script picker to API scripts
+
+Replace the file's full content with:
+
+```javascript
+frappe.ui.form.on("Gateway Route", {
+	refresh(frm) {
+		frm.set_query("override_script", () => ({
+			filters: { script_type: "API" },
+		}));
+
+		if (frm.is_new()) {
+			return;
+		}
+		frm.add_custom_button(__("Seed Hotfix From Current Implementation"), () => {
+			frappe.call({
+				method: "upande_gateway.api.seed_hotfix",
+				args: { route: frm.doc.name },
+				callback(r) {
+					if (r.message) {
+						frappe.set_route("Form", "Server Script", r.message);
+					}
+				},
+			});
+		});
+	},
+});
+```
+
+### M1 + I6: `api.py` — restore the missing comment, expand the hotfix banner
+
+Replace the file's full content with:
+
+```python
+import inspect
+import textwrap
+
+import frappe
+
+HOTFIX_BANNER = (
+	"# --- upande_gateway seed: review before use ---\n"
+	"# This body was copied from the live function below. Server Scripts run\n"
+	"# as flat top-level statements, not a function, and only the restricted\n"
+	"# subset described at /home/jk/Documents/mobile-app-blueprint.html (no\n"
+	"# import, no f-strings, no `_`-prefixed names). Before switching this\n"
+	"# route to Override:\n"
+	"#   1. Drop the `def ...(...):` signature line and its indentation.\n"
+	'#   2. Replace `return X` with `frappe.response["message"] = X`.\n'
+	"#   3. Replace any named parameters (e.g. `farm`) with\n"
+	'#      `frappe.form_dict.get("farm")` — they are not defined outside a\n'
+	"#      function signature.\n"
+	"#   4. Remove any decorator line(s) (e.g. @frappe.whitelist()) above the\n"
+	"#      original def — decorators aren't valid here either.\n"
+	"#   5. Inline or remove any import / module-level helper the original\n"
+	"#      function relied on — only what's already in this script's own\n"
+	"#      body is available.\n"
+	"# ---\n"
+)
+
+
+@frappe.whitelist()
+def seed_hotfix(route: str) -> str:
+	frappe.only_for("Script Manager")
+
+	if not frappe.db.exists("Gateway Route", route):
+		frappe.throw(f"No Gateway Route named {route}")
+
+	fn = inspect.unwrap(frappe.get_attr(route))
+	source = textwrap.dedent(inspect.getsource(fn))
+
+	script = frappe.new_doc("Server Script")
+	# Server Script's own doctype uses "autoname": "Prompt" (the same core
+	# doctype Task 3's tests set .name on explicitly) — a name must be set
+	# before insert(). Always create a fresh one per call (never reuse/
+	# overwrite an existing hotfix script an operator may already be
+	# mid-edit on): route + a short random suffix for uniqueness.
+	script.name = f"GW Hotfix: {route} ({frappe.generate_hash(length=6)})"
+	script.script_type = "API"
+	script.module = "Upande Gateway"
+	script.api_method = ""
+	script.script = HOTFIX_BANNER + source
+	script.insert()
+
+	return script.name
+```
+
+### `hooks.py` — register Task 3's dummy test functions as real, genuinely-protected routes
+
+The new registration check in `resolve_and_call` means Task 3's unit tests
+must call genuinely-registered routes (previously they called
+`resolve_and_call` directly with made-up `cmd` values that were never really
+registered anywhere — harmless before this fix, but now correctly rejected
+by the new check, exactly as it should reject any unregistered path). Add
+the dummy test functions to the existing `override_whitelisted_methods`
+block (which already has the Task 5 selftest entry):
+
+```python
+override_whitelisted_methods = {
+	"upande_gateway.selftest.ping": "upande_gateway.dispatch.resolve_and_call",
+	"upande_gateway.tests.test_dispatch._dummy_kwargs": "upande_gateway.dispatch.resolve_and_call",
+	"upande_gateway.tests.test_dispatch._dummy_form_dict_reader": "upande_gateway.dispatch.resolve_and_call",
+	"upande_gateway.tests.test_dispatch._dummy_post_only": "upande_gateway.dispatch.resolve_and_call",
+}
+```
+
+`bench --site kaitet.local run-tests` boots a fresh process per invocation,
+so this file edit alone (no separate restart/clear-cache step) is enough for
+the test run to pick it up — unlike Task 5's live-server scenario.
+
+### `test_dispatch.py` — new tests for the access-control and registration checks, plus M2/M3
+
+Replace the file's full content with:
+
+```python
+import frappe
+from frappe.tests import IntegrationTestCase
+
+from upande_gateway.dispatch import resolve_and_call
+from upande_gateway.upande_gateway.doctype.gateway_route.gateway_route import cache_key
+
+
+@frappe.whitelist()
+def _dummy_kwargs(name=None, farm=None):
+	return {"via": "original", "name": name, "farm": farm}
+
+
+@frappe.whitelist()
+def _dummy_form_dict_reader():
+	return {"via": "original", "farm": frappe.form_dict.get("farm")}
+
+
+@frappe.whitelist(methods=["POST"])
+def _dummy_post_only(farm=None):
+	return {"via": "original", "farm": farm}
+
+
+@frappe.whitelist()
+def _dummy_unregistered():
+	return {"via": "original"}
+
+
+class IntegrationTestDispatch(IntegrationTestCase):
+	def tearDown(self):
+		frappe.cache().delete_value(cache_key("upande_gateway.tests.test_dispatch._dummy_kwargs"))
+		frappe.cache().delete_value(
+			cache_key("upande_gateway.tests.test_dispatch._dummy_form_dict_reader")
+		)
+		frappe.cache().delete_value(
+			cache_key("upande_gateway.tests.test_dispatch._dummy_post_only")
+		)
+		frappe.db.delete(
+			"Gateway Route Log", {"parent": ["like", "upande_gateway.tests.test_dispatch.%"]}
+		)
+		frappe.db.delete(
+			"Gateway Route", {"name": ["like", "upande_gateway.tests.test_dispatch.%"]}
+		)
+		frappe.db.delete("Server Script", {"name": ["like", "GW Dispatch Test%"]})
+		frappe.db.commit()
+		frappe.local.form_dict = frappe._dict()
+		frappe.local.request = None
+		frappe.set_user("Administrator")
+
+	def call_as(self, route, http_method="POST", **kwargs):
+		frappe.local.form_dict = frappe._dict(cmd=route, **kwargs)
+		frappe.local.request = frappe._dict(method=http_method)
+		frappe.response = frappe._dict(docs=[])
+		return resolve_and_call(**frappe.local.form_dict)
+
+	def test_no_gateway_route_fails_open_to_original(self):
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="Reflex", farm="Chepsito"
+		)
+		self.assertEqual(result, {"via": "original", "name": "Reflex", "farm": "Chepsito"})
+
+	def test_normal_mode_calls_original_form_dict_reader(self):
+		route = frappe.new_doc("Gateway Route")
+		route.name = "upande_gateway.tests.test_dispatch._dummy_form_dict_reader"
+		route.mode = "Normal"
+		route.insert(ignore_permissions=True)
+
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_form_dict_reader", farm="Torongo"
+		)
+		self.assertEqual(result, {"via": "original", "farm": "Torongo"})
+
+	def test_override_mode_calls_server_script(self):
+		script = frappe.new_doc("Server Script")
+		script.name = "GW Dispatch Test Override"
+		script.script_type = "API"
+		script.script = 'frappe.response["message"] = {"via": "override"}'
+		script.insert(ignore_permissions=True)
+
+		route = frappe.new_doc("Gateway Route")
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
+		route.mode = "Override"
+		route.override_script = script.name
+		route.insert(ignore_permissions=True)
+
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="X", farm="Y"
+		)
+		self.assertIsNone(result)
+		self.assertEqual(frappe.response.get("message"), {"via": "override"})
+
+	def test_broken_override_script_raises(self):
+		script = frappe.new_doc("Server Script")
+		script.name = "GW Dispatch Test Broken"
+		script.script_type = "API"
+		script.script = "raise Exception('deliberately broken hotfix')"
+		script.insert(ignore_permissions=True)
+
+		route = frappe.new_doc("Gateway Route")
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
+		route.mode = "Override"
+		route.override_script = script.name
+		route.insert(ignore_permissions=True)
+
+		with self.assertRaisesRegex(Exception, "deliberately broken hotfix"):
+			self.call_as("upande_gateway.tests.test_dispatch._dummy_kwargs", name="X", farm="Y")
+
+	def test_disabled_override_script_fails_open_to_normal(self):
+		script = frappe.new_doc("Server Script")
+		script.name = "GW Dispatch Test Disabled"
+		script.script_type = "API"
+		script.script = 'frappe.response["message"] = {"via": "override"}'
+		script.disabled = 1
+		script.insert(ignore_permissions=True)
+
+		route = frappe.new_doc("Gateway Route")
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
+		route.mode = "Override"
+		route.override_script = script.name
+		route.insert(ignore_permissions=True)
+
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="X", farm="Y"
+		)
+		self.assertEqual(result, {"via": "original", "name": "X", "farm": "Y"})
+
+	def test_cache_bust_takes_effect_on_next_call(self):
+		route = frappe.new_doc("Gateway Route")
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
+		route.mode = "Normal"
+		route.insert(ignore_permissions=True)
+
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="A", farm="B"
+		)
+		self.assertEqual(result, {"via": "original", "name": "A", "farm": "B"})
+
+		script = frappe.new_doc("Server Script")
+		script.name = "GW Dispatch Test Flip"
+		script.script_type = "API"
+		script.script = 'frappe.response["message"] = {"via": "override"}'
+		script.insert(ignore_permissions=True)
+
+		route.reload()
+		route.mode = "Override"
+		route.override_script = script.name
+		route.save(ignore_permissions=True)
+
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="A", farm="B"
+		)
+		self.assertIsNone(result)
+		self.assertEqual(frappe.response.get("message"), {"via": "override"})
+
+		route.reload()
+		route.mode = "Normal"
+		route.save(ignore_permissions=True)
+
+		result = self.call_as(
+			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="A", farm="B"
+		)
+		self.assertEqual(result, {"via": "original", "name": "A", "farm": "B"})
+
+	def test_unregistered_route_is_rejected_not_executed(self):
+		with self.assertRaises(frappe.PermissionError):
+			self.call_as("upande_gateway.tests.test_dispatch._dummy_unregistered")
+
+	def test_post_only_original_rejects_get(self):
+		with self.assertRaises(frappe.PermissionError):
+			self.call_as(
+				"upande_gateway.tests.test_dispatch._dummy_post_only",
+				http_method="GET",
+				farm="Y",
+			)
+
+	def test_guest_cannot_call_non_guest_original(self):
+		frappe.set_user("Guest")
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				self.call_as(
+					"upande_gateway.tests.test_dispatch._dummy_kwargs", name="X", farm="Y"
+				)
+		finally:
+			frappe.set_user("Administrator")
+```
+
+### `test_gateway_route.py` — two new tests for I2 and I4
+
+Add these two test methods to the existing `IntegrationTestGatewayRoute` class
+(everything else in that file is unchanged):
+
+```python
+	def test_override_script_must_be_api_type(self):
+		doctype_event_script = frappe.new_doc("Server Script")
+		doctype_event_script.name = "GW Test Script Not API"
+		doctype_event_script.script_type = "DocType Event"
+		doctype_event_script.reference_doctype = "Gateway Route"
+		doctype_event_script.doctype_event = "Before Save"
+		doctype_event_script.script = "pass"
+		doctype_event_script.insert(ignore_permissions=True)
+
+		route = frappe.new_doc("Gateway Route")
+		route.name = "test.gateway.route.wrong_script_type"
+		route.mode = "Override"
+		route.override_script = doctype_event_script.name
+		with self.assertRaises(frappe.ValidationError):
+			route.insert(ignore_permissions=True)
+
+	def test_delete_busts_cache(self):
+		route = frappe.new_doc("Gateway Route")
+		route.name = "test.gateway.route.delete_cachebust"
+		route.mode = "Normal"
+		route.insert(ignore_permissions=True)
+
+		frappe.cache().set_value(cache_key(route.name), {"mode": "Normal"}, expires_in_sec=300)
+		frappe.delete_doc("Gateway Route", route.name, ignore_permissions=True)
+
+		self.assertIsNone(frappe.cache().get_value(cache_key(route.name)))
+```
+
+(`test_override_script_must_be_api_type`'s Server Script is cleaned up by
+the existing `tearDown`'s `"GW Test Script%"` pattern already in this file
+— no tearDown change needed. `cache_key` is already imported in this file's
+existing `test_save_busts_cache` test.)
+
+### Verification
+
+1. Apply all of the above exactly as given.
+2. Run `bench --site kaitet.local run-tests --app upande_gateway` — expect
+   all tests green (the existing ones plus the new ones above), pristine
+   output, no warnings.
+3. Re-verify Task 5's live self-test still behaves correctly after this
+   rewrite of `dispatch.py` (the mechanism changed materially): re-run the
+   curl sequence from Task 5 (fail-open, flip to Override, flip back) against
+   `upande_gateway.selftest.ping` and confirm identical behavior to Task 5's
+   original verification.
+4. Commit as one commit covering all of the above.
+
 ## Open Questions
 
 1. **Which real endpoint should be the first pilot route?** The user named allocation as the motivating example but said packhouse/quality were "just examples" — the actual first candidate(s) to wrap in production, in the owning app's own `hooks.py`, need to be chosen before that follow-up work is scoped.
