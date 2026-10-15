@@ -76,12 +76,43 @@ gateway's own registry. Until a `Gateway Route` doc exists for a given path,
 ### 4.2 Normal operation
 
 `frappe.form_dict.cmd` still carries the originally-requested dotted path
-even when dispatch has been overridden (to be confirmed against the actual
-v16 dispatcher during implementation — see §8). `resolve_and_call` reads it,
-looks up the matching `Gateway Route` (cached; see §4.5), finds
-`mode = Normal`, and calls the real function via
-`frappe.get_attr(path)(**frappe.form_dict)` with `cmd` stripped out —
-functionally identical to the client having called it directly.
+even when dispatch has been overridden (confirmed against the actual v16
+dispatcher — see §8, resolved). `resolve_and_call` reads it, confirms the
+path is genuinely registered to this dispatcher (§4.2.1), looks up the
+matching `Gateway Route` (cached; see §4.5), finds `mode = Normal`, and
+calls the real function with the full request payload — functionally
+identical to the client having called it directly, **including that
+function's own access policy** (§4.2.1).
+
+#### 4.2.1 Access-control parity (hard requirement)
+
+`resolve_and_call` is necessarily whitelisted with no method restriction
+and `allow_guest=True` at the Frappe level — it has to be reachable
+regardless of which protected route's request it's serving. That is
+exactly why it must NOT stop there: it re-checks the **real, original
+function's** own whitelist/guest/HTTP-method policy before dispatching
+either branch (Normal or Override). Without this, every protected route
+silently inherits the dispatcher's own wide-open policy instead of its
+own — a POST-only write endpoint becomes callable by GET (a CSRF
+exposure, since GET requests skip Frappe's CSRF check), and an
+`allow_guest=True` endpoint starts rejecting guests the moment it's
+registered, even with zero `Gateway Route` docs. Neither is acceptable:
+registering a route must be invisible to its callers until someone
+deliberately flips it.
+
+Before doing anything else, `resolve_and_call` also confirms that the
+`cmd` it read is genuinely a path `override_whitelisted_methods` maps to
+itself — not merely present in `frappe.form_dict.cmd` for some unrelated
+reason. `cmd` is not reliably "the route this call is for": Frappe's own
+internal `frappe.utils.safe_exec.call_whitelisted_function` (the helper
+Server Script event scripts use to call another whitelisted function by
+name) re-enters `execute_cmd` without resetting `form_dict.cmd` to the
+function being called — so a DocType Event script that incidentally calls
+a protected route mid-save would, without this check, see
+`resolve_and_call` instead reads the *outer* request's stale `cmd` (e.g.
+`frappe.desk.form.save.savedocs`) and blindly re-executes it. Refusing
+unregistered `cmd` values converts that into a clean, safe error instead
+of a dangerous wrong-function execution.
 
 ### 4.3 Flipping to an override (the incident-response path)
 
@@ -111,7 +142,10 @@ dependency on anyone else's availability.
 `resolve_and_call` reads route state from `frappe.cache()`, keyed by route
 path. `Gateway Route`'s `on_update` hook deletes that cache key, so a saved
 change is visible to the very next request — this is the mechanism that
-makes the switch "instant" rather than requiring a worker restart.
+makes the switch "instant" rather than requiring a worker restart. `on_trash`
+does the same, so deleting a route (not just editing it) takes effect
+immediately too, rather than leaving its last-known state servable for up
+to the cache's TTL.
 
 ## 5. Data model
 
@@ -151,27 +185,41 @@ capability than already exists for Server Script today.
 ## 7. Error handling
 
 - **Misconfiguration is rejected at save time**, not at call time:
-  `mode = Override` without `override_script` set cannot be saved.
+  `mode = Override` without `override_script` set cannot be saved, and
+  `override_script` must point at a `script_type = API` Server Script
+  (any other type fails at call time with a confusing, unrelated
+  `DoesNotExistError` otherwise).
 - **A broken hotfix fails like any other endpoint bug** — Frappe surfaces
   the exception normally. Recovery is the same one-step rollback as §4.4,
   available to the same operator, not dependent on a deploy.
+- **A disabled hotfix Server Script fails open to Normal**, not silently
+  nor with an opaque error. Ticking "Disabled" on the Server Script is the
+  natural emergency kill switch during an incident; it must behave like
+  flipping `mode` back to `Normal`, immediately.
 - **No `Gateway Route` doc yet for a registered path** → fail-open, call the
   real function directly (see §4.1). A route that's registered in hooks.py
   but never had its gateway doc created behaves exactly as if the gateway
   didn't exist.
+- **A `Gateway Route` whose path is not actually registered in any app's
+  `hooks.py`** (typo, or the registering deploy hasn't landed yet) is
+  savable, but warns the operator at save time — a route with no effect
+  should never be silently indistinguishable from one that's live.
+- **Any `cmd` that isn't genuinely registered to `resolve_and_call`** (see
+  §4.2.1) is refused outright, not executed — this is the guard against
+  executing the wrong function when `cmd` doesn't actually belong to the
+  call in progress.
 
-## 8. Open technical assumption to validate during implementation
+## 8. Technical assumption — resolved during implementation
 
 The design depends on `frappe.form_dict.cmd` (or equivalent) still holding
 the client's originally-requested dotted path when a request has been
 redirected via `override_whitelisted_methods`, so that one shared
 `resolve_and_call` function can serve every protected route without a
-per-route wrapper. This should be confirmed directly against the installed
-Frappe version on kaitet-group/local v16 bench before implementation
-proceeds past the first pilot route. If it does not hold, the fallback is a
-tiny one-line per-route wrapper function (still no change to the original
-function's file) instead of one shared resolver — strictly more lines, same
-overall design.
+per-route wrapper. **Confirmed directly against this bench's installed
+Frappe v16.50.0 source**: `frappe/handler.py`'s `execute_cmd` reassigns
+only its own local `cmd` variable via `frappe.override_whitelisted_method`,
+never `frappe.local.form_dict.cmd` itself — the assumption holds, no
+fallback needed.
 
 ## 9. Testing
 
