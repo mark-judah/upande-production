@@ -832,6 +832,12 @@ def seed_hotfix(route: str) -> str:
 	source = textwrap.dedent(inspect.getsource(fn))
 
 	script = frappe.new_doc("Server Script")
+	# Server Script's own doctype uses "autoname": "Prompt" (the same core
+	# doctype Task 3's tests set .name on explicitly) — a name must be set
+	# before insert(). Always create a fresh one per call (never reuse/
+	# overwrite an existing hotfix script an operator may already be
+	# mid-edit on): route + a short random suffix for uniqueness.
+	script.name = f"GW Hotfix: {route} ({frappe.generate_hash(length=6)})"
 	script.script_type = "API"
 	script.module = "Upande Gateway"
 	script.api_method = ""
