@@ -909,7 +909,7 @@ bench restart
 - [ ] **Step 4: Confirm Normal mode (no Gateway Route doc yet — fail-open path)**
 
 ```bash
-curl -s http://kaitet.local:8001/api/method/upande_gateway.selftest.ping \
+curl -s http://kaitet.local:8002/api/method/upande_gateway.selftest.ping \
   -H "Authorization: token <api_key>:<api_secret>"
 ```
 
@@ -950,7 +950,7 @@ frappe.db.commit()
 - [ ] **Step 7: Confirm Override takes effect with no restart**
 
 ```bash
-curl -s http://kaitet.local:8001/api/method/upande_gateway.selftest.ping \
+curl -s http://kaitet.local:8002/api/method/upande_gateway.selftest.ping \
   -H "Authorization: token <api_key>:<api_secret>"
 ```
 
