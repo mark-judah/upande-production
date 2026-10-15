@@ -515,6 +515,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from upande_gateway.dispatch import resolve_and_call
+from upande_gateway.upande_gateway.doctype.gateway_route.gateway_route import cache_key
 
 
 @frappe.whitelist()
@@ -529,6 +530,16 @@ def _dummy_form_dict_reader():
 
 class IntegrationTestDispatch(IntegrationTestCase):
 	def tearDown(self):
+		# Three tests below share one Gateway Route name (by necessity — they
+		# all dispatch the same dummy function), so they share one cache key.
+		# Cleanup here uses raw SQL (frappe.db.delete), which never triggers
+		# GatewayRoute.on_update — bust the cache explicitly so one test's
+		# Override state can never leak into the next test that reuses the
+		# same route name.
+		frappe.cache().delete_value(cache_key("upande_gateway.tests.test_dispatch._dummy_kwargs"))
+		frappe.cache().delete_value(
+			cache_key("upande_gateway.tests.test_dispatch._dummy_form_dict_reader")
+		)
 		frappe.db.delete(
 			"Gateway Route Log", {"parent": ["like", "upande_gateway.tests.test_dispatch.%"]}
 		)
@@ -541,6 +552,7 @@ class IntegrationTestDispatch(IntegrationTestCase):
 
 	def call_as(self, route, **kwargs):
 		frappe.local.form_dict = frappe._dict(cmd=route, **kwargs)
+		frappe.response = frappe._dict()
 		return resolve_and_call(**frappe.local.form_dict)
 
 	def test_no_gateway_route_fails_open_to_original(self):
@@ -576,7 +588,17 @@ class IntegrationTestDispatch(IntegrationTestCase):
 		result = self.call_as(
 			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="X", farm="Y"
 		)
-		self.assertEqual(result, {"via": "override"})
+		# Server Scripts that set frappe.response directly (this codebase's
+		# existing convention, e.g. the legacy scripts in upande_quality) get
+		# {} back from execute_method() by design —
+		# frappe/core/doctype/server_script/server_script.py:280-282 returns
+		# frappe.flags, not frappe.response. resolve_and_call mirrors
+		# frappe/handler.py's run_server_script exactly here: it returns None
+		# in that case, so it never clobbers frappe.response — exactly what a
+		# real HTTP request needs, since frappe.response (not this function's
+		# return value) is what the actual client receives.
+		self.assertIsNone(result)
+		self.assertEqual(frappe.response.get("message"), {"via": "override"})
 
 	def test_broken_override_script_raises(self):
 		script = frappe.new_doc("Server Script")
@@ -619,7 +641,8 @@ class IntegrationTestDispatch(IntegrationTestCase):
 		result = self.call_as(
 			"upande_gateway.tests.test_dispatch._dummy_kwargs", name="A", farm="B"
 		)
-		self.assertEqual(result["via"], "override")
+		self.assertIsNone(result)
+		self.assertEqual(frappe.response.get("message"), {"via": "override"})
 ```
 
 - [ ] **Step 2: Run the tests to verify they fail**
