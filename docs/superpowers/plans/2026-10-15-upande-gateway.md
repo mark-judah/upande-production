@@ -44,10 +44,10 @@ Run from the bench root:
 
 ```bash
 cd /home/jk/Projects/upande-local-bench-v16
-printf 'Upande Gateway\nEmergency override gateway for whitelisted Frappe endpoints\nUpande\ndev@upande.com\nmit\nn\n\n' | bench new-app upande_gateway --no-git
+printf 'Upande Gateway\nUpande Gateway Customizations\nUpande\ndev@upande.com\nmit\nn\n\n' | bench new-app upande_gateway --no-git
 ```
 
-The piped lines answer, in order: App Title, App Description, App Publisher, App Email, App License, "Create GitHub Workflow action for unittests" (n), Branch Name (blank = accept default). This matches the exact prompt sequence in `apps/frappe/frappe/utils/boilerplate.py:44-61`.
+The piped lines answer, in order: App Title, App Description, App Publisher, App Email, App License, "Create GitHub Workflow action for unittests" (n), Branch Name (blank = accept default). This matches the exact prompt sequence in `apps/frappe/frappe/utils/boilerplate.py:44-61`. The publisher/email/license/description values match this fleet's existing convention exactly — see `apps/upande_packhouse/upande_packhouse/hooks.py:1-6`.
 
 - [ ] **Step 2: Verify the generated hooks.py**
 
@@ -57,21 +57,40 @@ Open `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/upande_gatewa
 app_name = "upande_gateway"
 app_title = "Upande Gateway"
 app_publisher = "Upande"
-app_description = "Emergency override gateway for whitelisted Frappe endpoints"
+app_description = "Upande Gateway Customizations"
 app_email = "dev@upande.com"
 app_license = "mit"
 ```
 
 Do not add `required_apps` — this app depends on nothing.
 
-- [ ] **Step 3: Install on kaitet.local**
+- [ ] **Step 3: Add package.json matching this fleet's convention**
+
+Create `/home/jk/Projects/upande-local-bench-v16/apps/upande_gateway/package.json` (`bench new-app` does not generate this file; it's a fleet-wide addition on top of the scaffold — see `apps/upande_packhouse/package.json` for the pattern this mirrors exactly):
+
+```json
+{
+  "name": "upande_gateway",
+  "version": "1.0.0",
+  "description": "Upande Gateway Customizations",
+  "private": true,
+  "author": "Upande LTD <dev@upande.com>",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {}
+}
+```
+
+Note the deliberate difference from `hooks.py`: `license` here is `"MIT"` (uppercase) and `author` is the fuller `"Upande LTD <dev@upande.com>"` — this matches `upande_packhouse/package.json` byte-for-byte in shape, which uses different casing/format conventions for `hooks.py` (Python-side, consumed by `get_license_text()`, expects lowercase `"mit"`) versus `package.json` (npm-side convention, uppercase SPDX identifier) than hooks.py does. Don't "fix" this inconsistency — it's the existing fleet-wide pattern, not a typo.
+
+- [ ] **Step 4: Install on kaitet.local**
 
 ```bash
 cd /home/jk/Projects/upande-local-bench-v16
 bench --site kaitet.local install-app upande_gateway
 ```
 
-- [ ] **Step 4: Verify installation**
+- [ ] **Step 5: Verify installation**
 
 ```bash
 bench --site kaitet.local list-apps
@@ -79,7 +98,7 @@ bench --site kaitet.local list-apps
 
 Expected: `upande_gateway` appears in the output alongside `frappe`, `upande_packhouse`, `upande_quality`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 cd /home/jk/Projects/upande-local-bench-v16
