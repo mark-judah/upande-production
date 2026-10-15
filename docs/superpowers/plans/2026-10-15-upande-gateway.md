@@ -761,17 +761,19 @@ def _sample_protected_fn(farm=None):
 
 class IntegrationTestSeedHotfix(IntegrationTestCase):
 	def tearDown(self):
-		frappe.db.delete("Gateway Route", {"name": ["like", "test.seed.%"]})
+		frappe.db.delete(
+			"Gateway Route", {"name": ["like", "upande_gateway.tests.test_api.%"]}
+		)
 		frappe.db.delete("Server Script", {"script": ["like", "%_sample_protected_fn%"]})
 		frappe.db.commit()
 
 	def test_seed_hotfix_creates_server_script_with_banner_and_body(self):
+		import upande_gateway.tests.test_api as this_module
+
 		route = frappe.new_doc("Gateway Route")
-		route.name = "test.seed.fn"
+		route.name = f"{this_module.__name__}._sample_protected_fn"
 		route.mode = "Normal"
 		route.insert(ignore_permissions=True)
-
-		import upande_gateway.tests.test_api as this_module
 
 		script_name = seed_hotfix(f"{this_module.__name__}._sample_protected_fn")
 		script = frappe.get_doc("Server Script", script_name)
