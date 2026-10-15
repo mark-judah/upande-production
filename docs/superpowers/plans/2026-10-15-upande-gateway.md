@@ -529,7 +529,12 @@ def _dummy_form_dict_reader():
 
 class IntegrationTestDispatch(IntegrationTestCase):
 	def tearDown(self):
-		frappe.db.delete("Gateway Route", {"name": ["like", "test.dispatch.%"]})
+		frappe.db.delete(
+			"Gateway Route Log", {"parent": ["like", "upande_gateway.tests.test_dispatch.%"]}
+		)
+		frappe.db.delete(
+			"Gateway Route", {"name": ["like", "upande_gateway.tests.test_dispatch.%"]}
+		)
 		frappe.db.delete("Server Script", {"name": ["like", "GW Dispatch Test%"]})
 		frappe.db.commit()
 		frappe.local.form_dict = frappe._dict()
@@ -546,7 +551,7 @@ class IntegrationTestDispatch(IntegrationTestCase):
 
 	def test_normal_mode_calls_original_form_dict_reader(self):
 		route = frappe.new_doc("Gateway Route")
-		route.name = "test.dispatch.form_dict_reader"
+		route.name = "upande_gateway.tests.test_dispatch._dummy_form_dict_reader"
 		route.mode = "Normal"
 		route.insert(ignore_permissions=True)
 
@@ -563,7 +568,7 @@ class IntegrationTestDispatch(IntegrationTestCase):
 		script.insert(ignore_permissions=True)
 
 		route = frappe.new_doc("Gateway Route")
-		route.name = "test.dispatch.override"
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
 		route.mode = "Override"
 		route.override_script = script.name
 		route.insert(ignore_permissions=True)
@@ -581,7 +586,7 @@ class IntegrationTestDispatch(IntegrationTestCase):
 		script.insert(ignore_permissions=True)
 
 		route = frappe.new_doc("Gateway Route")
-		route.name = "test.dispatch.broken"
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
 		route.mode = "Override"
 		route.override_script = script.name
 		route.insert(ignore_permissions=True)
@@ -591,7 +596,7 @@ class IntegrationTestDispatch(IntegrationTestCase):
 
 	def test_cache_bust_takes_effect_on_next_call(self):
 		route = frappe.new_doc("Gateway Route")
-		route.name = "test.dispatch.flip"
+		route.name = "upande_gateway.tests.test_dispatch._dummy_kwargs"
 		route.mode = "Normal"
 		route.insert(ignore_permissions=True)
 
