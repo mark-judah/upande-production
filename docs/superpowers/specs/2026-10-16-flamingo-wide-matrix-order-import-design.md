@@ -118,6 +118,7 @@ platform:
 |---|---|---|
 | `Specification` | Sales Order Item | `custom_line` |
 | `Bunches Ordered` | Sales Order Item | `_bunches_ordered` (new virtual field, see part 2) |
+| `Bunch Rate` | Sales Order Item | `_bunch_rate` (new virtual field, see part 2) |
 | `PO Number` | Sales Order | `po_no` |
 | `Order Date` | Sales Order | `transaction_date` |
 | `Delivery Date` | Sales Order | `delivery_date` |
@@ -126,6 +127,12 @@ platform:
 `_row_fingerprint` (api/order_import.py:1029) for error messages — it is not
 mapped to any target field, matching the user's confirmation that matching
 is done on `LINE`, not `LINE CODE`.
+
+`item_row` only ever gains a key when a *mapped* column lands on it
+(`buildPreview`'s `item_row[target["target_fieldname"]] = raw`,
+api/order_import.py:1180) — so `BUNCH RATE`, like `Bunches Ordered`, must be
+a real mapped virtual field to ever reach `_resolve_spec_row` at all. It
+cannot be "threaded through" any other way.
 
 ### `expand_wide_matrix()` — new function in `order_import.py`
 
@@ -168,9 +175,9 @@ Algorithm:
    grouping back into separate orders is left entirely to `buildPreview`'s
    existing `multi_order_column` logic, unchanged.
 
-`BUNCH RATE` is read per item row (step 3/4) and threaded through as an
-internal value (not a mapped field) purely to drive the soft cross-check in
-part 2.
+`BUNCH RATE` is read per item row (step 3/4) and emitted as a sixth synthetic
+column (`Bunch Rate`), mapped like any other, purely to drive the soft
+cross-check in part 2.
 
 ## New work, part 2: bunches→boxes conversion in `_resolve_spec_row`
 
@@ -216,17 +223,19 @@ New helper `_boxes_from_bunches(spec_doc, bunches_ordered)`:
   today's "spec not found" and "incomplete spec" cases. No auto-rounding.
 - Otherwise returns `(boxes, None)`.
 
-### `getFieldCatalog()` — new virtual field
+### `getFieldCatalog()` — new virtual fields
 
-`_bunches_ordered` is added to `VIRTUAL_ITEM_FIELDS`
+`_bunches_ordered` and `_bunch_rate` are added to `VIRTUAL_ITEM_FIELDS`
 (api/order_import.py:29-31), alongside the existing `_stems_per_bunch`/
-`_bunches_per_box` virtuals, so it appears in the Desk mapping picker the
+`_bunches_per_box` virtuals, so both appear in the Desk mapping picker the
 same way: `{"fieldname": "_bunches_ordered", "label": "Bunches Ordered
-(converts to boxes via the Specification)", "fieldtype": "Int"}`. It is never
-a real Sales Order Item DocField — like the other two virtuals, it only ever
-exists as a transient key on the in-memory `item_row` dict during preview
-building, consumed and discarded by `_resolve_spec_row` before a real row is
-shaped by `build_spec_rows`.
+(converts to boxes via the Specification)", "fieldtype": "Int"}` and
+`{"fieldname": "_bunch_rate", "label": "Bunch Rate (stems/bunch, cross-checked
+against the Specification)", "fieldtype": "Int"}`. Neither is a real Sales
+Order Item DocField — like the other two virtuals, each only ever exists as
+a transient key on the in-memory `item_row` dict during preview building,
+consumed and discarded by `_resolve_spec_row` before a real row is shaped by
+`build_spec_rows`.
 
 ### `BUNCH RATE` — soft cross-check, not load-bearing
 
