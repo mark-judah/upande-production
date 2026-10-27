@@ -21,10 +21,16 @@ const BODY_PREVIEW_LIMIT = 600;
 // report elapsed milliseconds. Stored on the config under a typed key.
 type TimedConfig = InternalAxiosRequestConfig & { __startedAt?: number };
 
+/** Mask credentials so login traffic can be logged without leaking them. */
+function redact(s: string): string {
+  return s.replace(/(["']?(?:pwd|password|sid)["']?\s*[:=]\s*["']?)[^"'&,}\s;]+/gi, '$1***');
+}
+
 function preview(value: unknown): string {
   if (value == null) return '';
   try {
-    const s = typeof value === 'string' ? value : JSON.stringify(value);
+    const raw = typeof value === 'string' ? value : JSON.stringify(value);
+    const s = redact(raw);
     return s.length > BODY_PREVIEW_LIMIT ? s.slice(0, BODY_PREVIEW_LIMIT) + '… (' + s.length + ' chars)' : s;
   } catch {
     return String(value);
@@ -189,6 +195,37 @@ function buildClient(): AxiosInstance {
     },
   );
 
+  return instance;
+}
+
+/**
+ * Plain axios instance (no cookie / reauth / version-gate interceptors) with the
+ * same request/response logging as the main client. Used by the pre-session
+ * calls — login and the URL probe — which must not go through apiClient().
+ */
+let plainClient: AxiosInstance | null = null;
+export function loggedAxios(): AxiosInstance {
+  if (plainClient) return plainClient;
+  const instance = axios.create();
+  instance.interceptors.request.use((config) => {
+    (config as TimedConfig).__startedAt = Date.now();
+    // Pre-session calls use absolute URLs; show them in full.
+    logRequest(config);
+    return config;
+  });
+  instance.interceptors.response.use(
+    (response) => {
+      const started = (response.config as TimedConfig).__startedAt ?? Date.now();
+      logResponse(response, Date.now() - started);
+      return response;
+    },
+    (error: AxiosError) => {
+      const started = (error.config as TimedConfig | undefined)?.__startedAt ?? Date.now();
+      logError(error, Date.now() - started);
+      return Promise.reject(error);
+    },
+  );
+  plainClient = instance;
   return instance;
 }
 
