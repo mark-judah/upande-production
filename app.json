@@ -2,7 +2,7 @@
   "expo": {
     "name": "Upande Production",
     "slug": "upande-production",
-    "version": "1.1.2",
+    "version": "1.2.0",
     "platforms": [
       "ios",
       "android"
@@ -32,7 +32,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "versionCode": 5002
+      "versionCode": 105200
     },
     "plugins": [
       "./plugins/withReleaseSigning",
@@ -98,6 +98,6 @@
       "fallbackToCacheTimeout": 0,
       "url": "https://kaitet-group.upande.com/api/method/upande_mobile.api.ota.manifest?app=Upande%20Production"
     },
-    "runtimeVersion": "1.0"
+    "runtimeVersion": "101.2"
   }
 }
