@@ -43,9 +43,6 @@ jobs:
         run: npx tsc --noEmit
         continue-on-error: true
 
-      - name: Script tests
-        run: npm run test:scripts
-
       - name: Unit tests
         run: npm run test:ci
 
@@ -58,55 +55,6 @@ jobs:
       - name: Expo doctor
         run: npx expo-doctor
         continue-on-error: true
-
-  version:
-    name: Version preview
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      # The version script walks history back to the last v* tag, so a shallow
-      # clone would make it read the wrong starting point.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # Same rule as the release job: native changes since the last release need an APK.
-      - name: Detect native changes
-        id: native
-        run: node scripts/detect-native.mjs | tee native.json
-
-      - name: Compute next version
-        id: next
-        run: |
-          bump=patch
-          [ "$(jq -r .native native.json)" = "true" ] && bump=minor
-          node scripts/version.mjs --json --bump "$bump" | tee version.json
-
-      - name: Summarise the release this PR would produce
-        run: |
-          set -euo pipefail
-          {
-            echo "### Version impact"
-            echo
-            echo "| | |"
-            echo "|---|---|"
-            echo "| Current | \`$(jq -r .current version.json)\` |"
-            echo "| Next | \`$(jq -r .version version.json)\` |"
-            echo "| versionCode | \`$(jq -r .versionCode version.json)\` |"
-            echo "| Runtime | \`$(jq -r .runtimeVersion version.json)\` |"
-            echo "| Why | $(jq -r .reason native.json) |"
-            echo
-            if [ "$(jq -r .release version.json)" = "ota" ]; then
-              echo "Merging this PR into \`${{ github.base_ref }}\` publishes a **JS update** to GitHub Pages (no APK)."
-            else
-              echo "Merging this PR into \`${{ github.base_ref }}\` builds and publishes a signed **APK** (new runtime)."
-            fi
-            echo "Version advances one odometer step per merge (patch rolls over at 100, minor at 50)."
-          } >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: Debug APK

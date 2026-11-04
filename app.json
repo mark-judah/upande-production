@@ -2,7 +2,7 @@
   "expo": {
     "name": "Upande Production",
     "slug": "upande-production",
-    "version": "1.1.2",
+    "version": "1.0.0",
     "platforms": [
       "ios",
       "android"
@@ -69,26 +69,32 @@
           "faceIDPermission": "Allow Upande Production to use Face ID for biometric unlock."
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "@upande/mobile-kit",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "runtimeVersion": "101.1",
     "extra": {
       "router": {},
       "eas": {
         "projectId": "4df5ead6-3af2-4da2-864b-2feece7714d4"
       },
       "otaBaseUrl": "https://mark-judah.github.io/upande-production/ota",
-      "runtimeSdk": 54
+      "mobileKit": {
+        "sites": {
+          "production": "https://kaitet-group.upande.com"
+        }
+      }
     },
     "updates": {
       "enabled": true,
-      "url": "https://mark-judah.github.io/upande-production/ota/android/101.1/manifest.json",
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    }
+      "fallbackToCacheTimeout": 0,
+      "url": "https://kaitet-group.upande.com/api/method/upande_mobile.api.ota.manifest?app=Upande%20Production"
+    },
+    "runtimeVersion": "1.0"
   }
 }

@@ -8,8 +8,7 @@ import axios, {
 } from 'axios';
 import { storage, StorageKeys } from './storage';
 import { useNetworkStore } from '@/src/stores/networkStore';
-import { useUpdateRequiredStore } from '@/src/stores/updateRequiredStore';
-import { APP_VERSION, RUNTIME_VERSION } from './version';
+import { APP_VERSION } from './version';
 import { getDeviceId } from './device-id';
 
 /** Toggle to silence all API logs (e.g. in release builds). */
@@ -145,7 +144,6 @@ function buildClient(): AxiosInstance {
     const h = config.headers as Record<string, string>;
     h['X-App-Name'] = 'production';
     h['X-App-Version'] = APP_VERSION;
-    h['X-App-Runtime'] = RUNTIME_VERSION;
     const deviceId = await getDeviceId();
     if (deviceId) h['X-Device-Id'] = deviceId;
     (config as TimedConfig).__startedAt = Date.now();
@@ -170,11 +168,6 @@ function buildClient(): AxiosInstance {
         if (isNetworkError(error)) {
           try { useNetworkStore.getState().notifyApiFailure(); } catch {}
         }
-        return Promise.reject(error);
-      }
-      // 426: the server's minimum-version gate. Lock the app to the update screen.
-      if (error.response.status === 426) {
-        try { useUpdateRequiredStore.getState().trigger(error.response.data); } catch {}
         return Promise.reject(error);
       }
       // Expired session → silently re-login with the stored password and retry

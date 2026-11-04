@@ -74,11 +74,6 @@ export function DrawerMenu() {
     setTimeout(() => router.push(route as any), 220);
   };
 
-  const onSettings = () => {
-    closeWithAnim();
-    setTimeout(() => router.push('/settings'), 220);
-  };
-
   const onSignOut = async () => {
     closeWithAnim();
     setTimeout(async () => {
@@ -154,13 +149,6 @@ export function DrawerMenu() {
             </View>
 
             <View style={s.footer}>
-              <TouchableOpacity style={s.footerRow} onPress={onSettings} activeOpacity={0.7}>
-                <View style={[s.badge, { backgroundColor: '#EEF2FF' }]}>
-                  <Ionicons name="cog-outline" size={15} color="#6366F1" />
-                </View>
-                <Text style={s.footerText}>Settings</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity style={s.footerRow} onPress={onSignOut} activeOpacity={0.7}>
                 <View style={[s.badge, { backgroundColor: '#FEF2F2' }]}>
                   <Ionicons name="log-out-outline" size={15} color={colors.error} />
