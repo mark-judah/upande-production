@@ -2,7 +2,7 @@
   "expo": {
     "name": "Upande Production",
     "slug": "upande-production",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "platforms": [
       "ios",
       "android"
@@ -32,7 +32,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "versionCode": 105100
+      "versionCode": 105101
     },
     "plugins": [
       "./plugins/withReleaseSigning",
