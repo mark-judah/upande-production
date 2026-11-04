@@ -2,7 +2,7 @@
   "expo": {
     "name": "Upande Production",
     "slug": "upande-production",
-    "version": "1.0.2",
+    "version": "1.1.2",
     "platforms": [
       "ios",
       "android"
@@ -86,7 +86,9 @@
       "mobileKit": {
         "sites": {
           "production": "https://kaitet-group.upande.com"
-        }
+        },
+        "versionCodeBase": 100000,
+        "runtimeMajorBase": 100
       },
       "runtimeSdk": 54
     },
