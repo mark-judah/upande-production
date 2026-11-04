@@ -5,7 +5,7 @@ name: PR Checks
 # actually compile, and the commits have to say what version they produce.
 on:
   pull_request:
-    branches: [master]
+    branches: [main]
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}

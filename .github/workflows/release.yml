@@ -11,7 +11,7 @@ name: Release
 # Either way the bump is committed, tagged and given a GitHub Release.
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
