@@ -31,7 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Crop Cycle', icon: 'leaf-outline', route: '/crop-cycle' },
   { label: 'Harvesting', icon: 'cut-outline', route: '/harvesting' },
   { label: 'Propagation', icon: 'sparkles-outline', route: '/propagation' },
-  { label: 'Greenhouse Ops', icon: 'shield-checkmark-outline', route: '/greenhouse-ops' },
+  { label: 'Greenhouse Audits', icon: 'shield-checkmark-outline', route: '/greenhouse-ops' },
   { label: 'Greenhouse Specs', icon: 'home-outline', route: '/greenhouse-specs' },
   { label: 'Trials', icon: 'flask-outline', route: '/trials' },
   { label: 'Forecasting', icon: 'trending-up-outline', route: '/forecasting' },

@@ -164,9 +164,12 @@ function buildClient(): AxiosInstance {
     async (error: AxiosError) => {
       const started = (error.config as TimedConfig | undefined)?.__startedAt ?? Date.now();
       logError(error, Date.now() - started);
-      // No response means the request never landed — likely a network problem.
+      // No response: a dropped connection is a network problem, but a timeout means
+      // the server is reachable and slow, so it must not flip the app offline.
       if (!error.response) {
-        try { useNetworkStore.getState().notifyApiFailure(); } catch {}
+        if (isNetworkError(error)) {
+          try { useNetworkStore.getState().notifyApiFailure(); } catch {}
+        }
         return Promise.reject(error);
       }
       // 426: the server's minimum-version gate. Lock the app to the update screen.
@@ -269,15 +272,19 @@ export class HttpError extends Error {
   }
 }
 
-/** A connectivity failure — request never reached the server. */
+/** The request ran past our client timeout: the server is reachable but slow. */
+function isTimeout(err: AxiosError): boolean {
+  if (err.response) return false;
+  if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') return true;
+  return typeof err.message === 'string' && /timeout|timed out/i.test(err.message);
+}
+
+/** A connectivity failure — request never reached the server. Timeouts are not. */
 function isNetworkError(err: AxiosError): boolean {
-  if (err.response) return false; // server did respond
-  if (err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED') return true;
+  if (err.response || isTimeout(err)) return false;
+  if (err.code === 'ERR_NETWORK') return true;
   // Axios in RN uses 'Network Error' as the message for fetch-level failures.
-  if (typeof err.message === 'string' && /network\s*error|failed to fetch|timeout/i.test(err.message)) {
-    return true;
-  }
-  return false;
+  return typeof err.message === 'string' && /network\s*error|failed to fetch/i.test(err.message);
 }
 
 /** Strip HTML tags/entities from a Frappe message for plain-text display. */
@@ -338,6 +345,9 @@ export function extractServerMessage(body: unknown): string | undefined {
 export function mapAxiosError(err: unknown): HttpError {
   if (err instanceof HttpError) return err;
   if (isAxiosError(err)) {
+    if (isTimeout(err)) {
+      return new HttpError(0, 'The server took too long to respond. Try again.', null);
+    }
     if (isNetworkError(err)) {
       return new HttpError(
         0,

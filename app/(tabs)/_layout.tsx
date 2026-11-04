@@ -75,7 +75,7 @@ export default function TabLayout() {
       <Tabs.Screen name="crop-cycle" options={{ title: 'Crop Cycle' }} />
       <Tabs.Screen name="harvesting" options={{ title: 'Harvesting' }} />
       <Tabs.Screen name="propagation" options={{ title: 'Propagation' }} />
-      <Tabs.Screen name="greenhouse-ops" options={{ title: 'Greenhouse Ops' }} />
+      <Tabs.Screen name="greenhouse-ops" options={{ title: 'Greenhouse Audits' }} />
 
       {/* Drawer-only — hide from bottom bar but keep route in stack */}
       <Tabs.Screen name="trials" options={{ title: 'Trials', href: null }} />

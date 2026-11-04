@@ -6,6 +6,7 @@ import { useFonts, DMSans_400Regular, DMSans_500Medium } from '@expo-google-font
 import { Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
 import { ToastProvider } from '@/src/components/Toast';
+import { DialogHost } from '@/src/components/DialogHost';
 import { DrawerMenu } from '@/src/components/DrawerMenu';
 import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { useAuthStore } from '@/src/stores/authStore';
@@ -109,6 +110,8 @@ export default function RootLayout() {
         {/* Drawer is rendered at the root so its Modal sits ABOVE the Tabs
             navigator (including the bottom tab bar). Lives in zustand state. */}
         <DrawerMenu />
+        {/* Every confirm (showDialog) renders here, above sheets and the drawer. */}
+        <DialogHost />
         {/* Sticky offline indicator across all screens. */}
         <OfflineBanner />
         </UpdateProvider>

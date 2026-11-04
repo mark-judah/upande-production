@@ -1,16 +1,12 @@
 import { api } from './api';
 
 // --- Weekly Production Plan Form (greenhouse x ISO week) ---
-// One plan per greenhouse per week: variety stem targets + a task list.
-// Milestone tasks (bending/uproot due that week) are auto-seeded server-side.
+// One plan per greenhouse per week. Header: company, farm, week, supervisor,
+// greenhouse. Each Greenhouse Operations Task row: day, assigned Task, variety,
+// purpose, target, actual (achievement computed server-side), remarks.
 
 export const TASK_STATUSES = ['Open', 'In Progress', 'Done', 'Skipped'] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
-
-export const TASK_OPERATIONS = [
-  'Harvest', 'Spray', 'Irrigate', 'Scout', 'Bend', 'Prune',
-  'De-leaf', 'Weed', 'Feed', 'Plant', 'Uproot', 'Maintenance', 'Other',
-] as const;
 
 export const DAYS_OF_WEEK = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -20,6 +16,10 @@ export interface PlanSummary {
   name: string;
   greenhouse: string;
   farm: string;
+  company: string;
+  supervisor: string;
+  /** 0 draft, 1 submitted (locked). */
+  docstatus: number;
   planYear: number;
   planWeek: number;
   planPeriod: string;
@@ -34,12 +34,16 @@ export interface PlanSummary {
 export interface PlanTask {
   name: string;
   taskName: string;
+  assignedTask?: string;
+  day?: string;
+  purpose?: string;
   operation: string;
   variety?: string;
   target: number;
   actual: number;
+  achievement: number;
+  supervisorsRemarks?: string;
   beds?: string;
-  dayOfWeek?: string;
   dueDate?: string;
   assignedTo?: string;
   assignedToName?: string;
@@ -59,6 +63,10 @@ export interface PlanVariety {
 
 export interface PlanDetail {
   name: string;
+  company: string;
+  supervisor: string;
+  supervisorName: string;
+  docstatus: number;
   greenhouse: string;
   farm: string;
   planYear: number;
@@ -72,20 +80,19 @@ export interface SavePlanPayload {
   name?: string;
   greenhouse?: string;
   company?: string;
+  farm?: string;
+  supervisor?: string;
   plan_year?: number;
   plan_week?: number;
   tasks?: Array<{
     name?: string;
-    task_name?: string;
-    operation?: string;
+    assigned_task?: string;
+    day?: string;
+    purpose?: string;
     variety?: string;
     target?: number;
     actual?: number;
-    beds?: string;
-    day_of_week?: string;
-    due_date?: string;
-    assigned_to?: string;
-    status?: string;
+    supervisors_remarks?: string;
   }>;
   varieties?: Array<{ name?: string; variety?: string; planned_stems?: number; notes?: string }>;
 }
@@ -94,19 +101,22 @@ export interface UpdateTaskPayload {
   plan: string;
   task: string;
   status: TaskStatus;
-  completion_note?: string;
   actual?: number;
+  supervisors_remarks?: string;
+  /** Submit (lock) the whole plan after saving this task. */
+  submit?: boolean;
 }
 
 interface RawPlan {
-  name?: string; greenhouse?: string; farm?: string;
+  name?: string; docstatus?: number; greenhouse?: string; farm?: string; company?: string; supervisor?: string; supervisor_name?: string;
   plan_year?: number; plan_week?: number; plan_period?: string;
   tasks_total?: number; tasks_open?: number; tasks_done?: number; planned_stems?: number;
   owner?: string; is_mine?: boolean;
 }
 interface RawTask {
-  name?: string; task_name?: string; operation?: string; variety?: string;
-  target?: number; actual?: number; beds?: string; day_of_week?: string; due_date?: string; assigned_to?: string;
+  name?: string; task_name?: string; assigned_task?: string; day?: string; purpose?: string;
+  operation?: string; variety?: string; achievement?: number; supervisors_remarks?: string;
+  target?: number; actual?: number; beds?: string; due_date?: string; assigned_to?: string;
   assigned_to_name?: string; status?: string; harvested?: number; completion_note?: string;
 }
 interface RawVariety {
@@ -123,6 +133,9 @@ function toSummary(r: RawPlan): PlanSummary {
     name: String(r.name ?? ''),
     greenhouse: String(r.greenhouse ?? ''),
     farm: String(r.farm ?? ''),
+    company: String(r.company ?? ''),
+    supervisor: String(r.supervisor ?? ''),
+    docstatus: Number(r.docstatus ?? 0),
     planYear: Number(r.plan_year ?? 0),
     planWeek: Number(r.plan_week ?? 0),
     planPeriod: String(r.plan_period ?? ''),
@@ -139,12 +152,16 @@ function toTask(r: RawTask): PlanTask {
   return {
     name: String(r.name ?? ''),
     taskName: String(r.task_name ?? ''),
+    assignedTask: r.assigned_task ? String(r.assigned_task) : undefined,
+    day: r.day ? String(r.day) : undefined,
+    purpose: r.purpose ? String(r.purpose) : undefined,
     operation: String(r.operation ?? ''),
     variety: r.variety ? String(r.variety) : undefined,
     target: Number(r.target ?? 0),
     actual: Number(r.actual ?? 0),
+    achievement: Number(r.achievement ?? 0),
+    supervisorsRemarks: r.supervisors_remarks ? String(r.supervisors_remarks) : undefined,
     beds: r.beds ? String(r.beds) : undefined,
-    dayOfWeek: r.day_of_week ? String(r.day_of_week) : undefined,
     dueDate: r.due_date ? String(r.due_date) : undefined,
     assignedTo: r.assigned_to ? String(r.assigned_to) : undefined,
     assignedToName: r.assigned_to_name ? String(r.assigned_to_name) : undefined,
@@ -155,7 +172,7 @@ function toTask(r: RawTask): PlanTask {
 }
 
 export const planningApi = {
-  async list(filters?: { greenhouse?: string; plan_year?: number; plan_week?: number; limit?: number; scope?: 'mine' | 'all' }): Promise<PlanSummary[]> {
+  async list(filters?: { farm?: string; greenhouses?: string[]; plan_year?: number; plan_week?: number; limit?: number; scope?: 'mine' | 'all' }): Promise<PlanSummary[]> {
     const body = await api<ListResponse>({
       method: 'POST',
       url: '/api/method/upande_agriculture.mobile.api.productionListPlanForms',
@@ -173,6 +190,10 @@ export const planningApi = {
     const d = body.data ?? {};
     return {
       name: String(d.name ?? ''),
+      company: String(d.company ?? ''),
+      supervisor: String(d.supervisor ?? ''),
+      supervisorName: String(d.supervisor_name ?? ''),
+      docstatus: Number(d.docstatus ?? 0),
       greenhouse: String(d.greenhouse ?? ''),
       farm: String(d.farm ?? ''),
       planYear: Number(d.plan_year ?? 0),

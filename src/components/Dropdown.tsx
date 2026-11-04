@@ -1,9 +1,8 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
-import { openDropdownPicker } from './DropdownPickerScreen';
+import { DropdownPickerList } from './DropdownPickerScreen';
 
 export interface DropdownOption {
   label: string;
@@ -36,20 +35,16 @@ export function Dropdown({
 }: DropdownProps) {
   const selected = options.find((o) => o.value === value);
 
+  const [open, setOpen] = useState(false);
+
   const handleOpen = () => {
     if (disabled) return;
-    // Hand the current options/value off to the full-page picker and
-    // navigate there instead of popping a modal over this screen. The
-    // picker calls onChange (via onSelect) and navigates back on its own.
-    openDropdownPicker({
-      label,
-      value,
-      options,
-      searchable,
-      emptyText,
-      onSelect: onChange,
-    });
-    router.push('/dropdown-picker');
+    setOpen(true);
+  };
+
+  const handleSelect = (next: string) => {
+    setOpen(false);
+    onChange(next);
   };
 
   return (
@@ -65,6 +60,31 @@ export function Dropdown({
         </Text>
         <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
       </TouchableOpacity>
+
+      {/* A centered popup rather than a pushed page: it also works from inside
+          the bottom sheets (themselves Modals), which a route push sits behind. */}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView style={s.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+          <View style={s.popup}>
+            <View style={s.popupHeader}>
+              <Text style={s.popupTitle} numberOfLines={1}>{label || placeholder}</Text>
+              <TouchableOpacity onPress={() => setOpen(false)} hitSlop={8} style={s.closeBtn}>
+                <Ionicons name="close" size={18} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            {open ? (
+              <DropdownPickerList
+                value={value}
+                options={options}
+                searchable={searchable}
+                emptyText={emptyText}
+                onSelect={handleSelect}
+              />
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -86,4 +106,31 @@ const s = StyleSheet.create({
   fieldError: { borderColor: colors.error, borderWidth: 1.5 },
   value: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.text, flex: 1 },
   placeholder: { color: colors.textMuted },
+
+  backdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  popup: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '70%',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  popupHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+  popupTitle: { flex: 1, fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
+  closeBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

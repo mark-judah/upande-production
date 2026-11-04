@@ -47,12 +47,13 @@ const mapVarieties = (raw: RawVariety[] | undefined): VarietyRow[] =>
   }));
 
 export const reportsApi = {
-  /** Harvest broken down by farm/greenhouse → variety → stem length for a single day. */
-  async harvestReport(date: string, farm?: string): Promise<HarvestReport> {
+  /** Harvest broken down by farm/greenhouse → variety → stem length, for one
+   *  day or an inclusive from..to range. */
+  async harvestReport(fromDate: string, toDate: string, farm?: string): Promise<HarvestReport> {
     const body = await api<RawReport>({
       method: 'POST',
       url: '/api/method/upande_agriculture.mobile.api.productionHarvestReport',
-      data: { date, ...(farm ? { farm } : {}) },
+      data: { from_date: fromDate, to_date: toDate, ...(farm ? { farm } : {}) },
     });
     const mapFarms = (raw: RawFarm[] | undefined): FarmRow[] =>
       (raw ?? []).map((f) => ({
@@ -67,7 +68,7 @@ export const reportsApi = {
         varieties: mapVarieties(g.varieties),
       }));
     return {
-      date: String(body.data?.date ?? date),
+      date: String(body.data?.date ?? fromDate),
       totalStems: Number(body.data?.total_stems ?? 0),
       farms: mapFarms(body.data?.farms),
       greenhouses: mapGreenhouses(body.data?.greenhouses),

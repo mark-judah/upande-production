@@ -1,26 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, fontFamily, fontSize, shadow, spacing } from '@/src/theme';
 import { useToast } from '@/src/components/Toast';
 import { mapAxiosError } from '@/src/services/api';
-import { harvestingApi } from '@/src/services/harvesting';
 import { productionProjectionApi, type ProjectionWeek } from '@/src/services/production-projection';
 import type { PickerOption } from '@/src/services/crop-cycle';
 
 /**
  * "This Week" — the actual job Forecasting exists for: fill in Revised for
  * every greenhouse×variety, for one week, as fast as typing a spreadsheet
- * column. Not a review dashboard with edit bolted on.
- *
- * Stopgap data source: there is no bulk "every projection for week N" API
- * yet (that needs a new Kaitet Server Script), so this discovers rows by
- * fetching each greenhouse's varieties, then each variety's full-year
- * projection, pulling out just the requested week — concurrency-limited so
- * it doesn't fire 100 requests at once. Slower to populate than a bulk
- * endpoint would be; correct and usable today. Swap the loader for a single
- * bulk call once that endpoint exists — everything below it stays the same.
+ * column. Not a review dashboard with edit bolted on. Rows come a page at a
+ * time from one server call; rows needing a comment come first.
  */
+
+const PAGE_SIZE = 50;
 
 interface EntryRow {
   key: string;
@@ -29,21 +23,11 @@ interface EntryRow {
   variety: string;
   varietyLabel: string;
   projectionName: string;
+  flagged: boolean;
   week: ProjectionWeek;
 }
 
 type RowStatus = 'idle' | 'saving' | 'saved' | 'error';
-
-async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
-  let i = 0;
-  const lane = async () => {
-    while (i < items.length) {
-      const item = items[i++];
-      await worker(item);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
-}
 
 export function ForecastThisWeek({
   greenhouses,
@@ -68,7 +52,10 @@ export function ForecastThisWeek({
 
   const [rows, setRows] = useState<EntryRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [filledCount, setFilledCount] = useState(0);
+  const [query, setQuery] = useState(search.trim());
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
@@ -82,71 +69,72 @@ export function ForecastThisWeek({
   const saveGen = useRef<Record<string, number>>({});
 
   const hasActualContext = weekNo <= currentWeek;
-  const isCommentWeek = weekNo === currentWeek - 1;
+
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [greenhouses, year, weekNo, query, offBudgetOnly]);
 
   useEffect(() => {
     const seq = ++loadSeq.current;
-    setRows([]);
     setDrafts({});
     setComments({});
     setRowStatus({});
-    setProgress({ done: 0, total: greenhouses.length });
-    if (greenhouses.length === 0) return;
-    setLoading(true);
-
-    runPool(greenhouses, 4, async (gh) => {
-      try {
-        const data = await harvestingApi.getGreenhouseData(gh.name);
-        await runPool(data.varieties, 3, async (v) => {
-          try {
-            const proj = await productionProjectionApi.fetchProjection(gh.name, v.name, year);
-            const week = proj.weeks.find((w) => w.weekNo === weekNo);
-            if (week && loadSeq.current === seq) {
-              const row: EntryRow = {
-                key: `${gh.name}::${v.name}`,
-                greenhouse: gh.name,
-                greenhouseLabel: gh.label,
-                variety: v.name,
-                varietyLabel: v.label,
-                projectionName: proj.name,
-                week,
-              };
-              setRows((prev) => [...prev, row]);
-            }
-          } catch {
-            // No projection for this variety this year — not every variety has one, skip.
-          }
-        });
-      } catch {
-        // Greenhouse has no crop/variety data — skip.
-      } finally {
-        if (loadSeq.current === seq) setProgress((p) => ({ ...p, done: p.done + 1 }));
-      }
-    }).finally(() => {
-      if (loadSeq.current === seq) setLoading(false);
-    });
-  }, [greenhouses, year, weekNo]);
-
-  const isFlagged = (row: EntryRow): boolean => {
-    if (!isCommentWeek || row.week.projectedQty === 0) return false;
-    const variance = ((row.week.actualHarvest - row.week.projectedQty) / row.week.projectedQty) * 100;
-    return Math.abs(variance) >= 10;
-  };
-
-  const sortedRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let filtered = q
-      ? rows.filter((r) => r.greenhouseLabel.toLowerCase().includes(q) || r.varietyLabel.toLowerCase().includes(q))
-      : rows;
-    if (offBudgetOnly) {
-      filtered = filtered.filter((r) => hasActualContext && r.week.actualHarvest !== r.week.projectedQty);
+    if (greenhouses.length === 0) {
+      setRows([]);
+      setTotal(0);
+      setFilledCount(0);
+      return;
     }
-    const flagged = filtered.filter(isFlagged);
-    const rest = filtered.filter((r) => !isFlagged(r));
-    return [...flagged, ...rest];
-  }, [rows, search, offBudgetOnly, hasActualContext, isCommentWeek]);
+    setLoading(true);
+    const labels = new Map(greenhouses.map((g) => [g.name, g.label]));
+    productionProjectionApi
+      .fetchWeekPage({
+        greenhouses: greenhouses.map((g) => g.name),
+        year,
+        weekNo,
+        currentWeek,
+        search: query,
+        offBudgetOnly,
+        start: page * PAGE_SIZE,
+        pageLength: PAGE_SIZE,
+      })
+      .then((res) => {
+        if (loadSeq.current !== seq) return;
+        setTotal(res.total);
+        setFilledCount(res.filled);
+        setRows(
+          res.rows.map((r) => ({
+            key: `${r.greenhouse}::${r.variety}`,
+            greenhouse: r.greenhouse,
+            greenhouseLabel: labels.get(r.greenhouse) ?? r.greenhouse,
+            variety: r.variety,
+            varietyLabel: r.variety,
+            projectionName: r.projectionName,
+            flagged: r.flagged,
+            week: r.week,
+          })),
+        );
+      })
+      .catch((err) => {
+        if (loadSeq.current !== seq) return;
+        setRows([]);
+        setTotal(0);
+        showError(mapAxiosError(err).message);
+      })
+      .finally(() => {
+        if (loadSeq.current === seq) setLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showError is a fresh closure each render
+  }, [greenhouses, year, weekNo, currentWeek, query, offBudgetOnly, page]);
 
-  const filledCount = rows.filter((r) => (r.week.revisedForecast || 0) > 0).length;
+  const isFlagged = (row: EntryRow): boolean => row.flagged;
+  const sortedRows = rows;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const saveRow = async (row: EntryRow, overrideValue?: number) => {
     const draft = drafts[row.key];
@@ -178,6 +166,7 @@ export function ForecastThisWeek({
       ]);
       if (!isLatest()) return;
       setRowStatus((p) => ({ ...p, [row.key]: 'saved' }));
+      if (!(row.week.revisedForecast > 0) && n > 0) setFilledCount((c) => c + 1);
       setRows((prev) =>
         prev.map((r) =>
           r.key === row.key
@@ -199,20 +188,16 @@ export function ForecastThisWeek({
 
   return (
     <View>
-      <Text style={s.progressText}>
-        {loading && rows.length === 0
-          ? `Loading… ${progress.done}/${progress.total} greenhouses`
-          : `${filledCount} of ${rows.length} filled`}
-      </Text>
+      <Text style={s.progressText}>{loading ? 'Loading…' : `${filledCount} of ${total} filled`}</Text>
 
-      {loading && rows.length === 0 ? (
+      {loading ? (
         <View style={s.loadingCard}>
           <ActivityIndicator color={colors.textMuted} />
         </View>
       ) : rows.length === 0 ? (
-        <Text style={s.emptyText}>No projections found for week {weekNo}.</Text>
-      ) : sortedRows.length === 0 ? (
-        <Text style={s.emptyText}>No match{search ? ` for "${search}"` : ''}.</Text>
+        <Text style={s.emptyText}>
+          {query || offBudgetOnly ? `No match${query ? ` for "${query}"` : ''}.` : `No projections found for week ${weekNo}.`}
+        </Text>
       ) : (
         sortedRows.map((row, idx) => {
           const flagged = isFlagged(row);
@@ -278,6 +263,28 @@ export function ForecastThisWeek({
           );
         })
       )}
+
+      {!loading && total > PAGE_SIZE ? (
+        <View style={s.pager}>
+          <TouchableOpacity
+            onPress={() => setPage((p) => p - 1)}
+            disabled={page === 0}
+            style={[s.pageBtn, page === 0 && s.pageBtnOff]}
+          >
+            <Ionicons name="chevron-back" size={16} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={s.pageText}>
+            {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setPage((p) => p + 1)}
+            disabled={page >= pages - 1}
+            style={[s.pageBtn, page >= pages - 1 && s.pageBtnOff]}
+          >
+            <Ionicons name="chevron-forward" size={16} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -320,4 +327,12 @@ const s = StyleSheet.create({
   },
   sameChip: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: borderRadius.sm, backgroundColor: colors.surfaceAlt },
   sameChipText: { fontFamily: fontFamily.medium, fontSize: 10, color: colors.textSecondary },
+
+  pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md, paddingVertical: spacing.md },
+  pageBtn: {
+    padding: spacing.sm, borderRadius: borderRadius.sm, backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+  },
+  pageBtnOff: { opacity: 0.4 },
+  pageText: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.text },
 });

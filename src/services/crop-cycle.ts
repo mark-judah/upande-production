@@ -87,6 +87,8 @@ export interface PickerOption {
   /** Stock UOM (when returned by productionListVarieties) — a Harvest task's
    *  target is a quantity of this variety, in this unit (e.g. "Stems"). */
   uom?: string;
+  /** Company (when returned by productionListFarms). */
+  company?: string;
 }
 
 // --- New crop-cycle model (greenhouse-keyed, bed-range configuration) ---
@@ -151,6 +153,10 @@ interface PickerResponse {
     farms?: PickerOption[];
     companies?: PickerOption[];
     reasons?: PickerOption[];
+    employees?: PickerOption[];
+    tasks?: PickerOption[];
+    me?: string;
+    my_company?: string;
     error?: string;
   };
 }
@@ -248,6 +254,26 @@ export const cropCycleApi = {
       data: { search: search ?? '', limit: 200 },
     });
     return body.data?.companies ?? [];
+  },
+
+  /** Active employees, plus `me` -- the Employee linked to the logged-in user --
+   *  and that user's company. */
+  async listEmployees(): Promise<{ employees: PickerOption[]; me: string; myCompany: string }> {
+    const body = await api<PickerResponse>({
+      method: 'POST',
+      url: '/api/method/upande_agriculture.mobile.api.productionListEmployees',
+      data: { limit: 5000 },
+    });
+    return { employees: body.data?.employees ?? [], me: body.data?.me ?? '', myCompany: body.data?.my_company ?? '' };
+  },
+
+  async listTasks(): Promise<PickerOption[]> {
+    const body = await api<PickerResponse>({
+      method: 'POST',
+      url: '/api/method/upande_agriculture.mobile.api.productionListTasks',
+      data: { limit: 5000 },
+    });
+    return body.data?.tasks ?? [];
   },
 
   async listRejectionReasons(): Promise<PickerOption[]> {

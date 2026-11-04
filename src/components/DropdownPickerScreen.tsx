@@ -32,17 +32,22 @@ function consumePendingRequest(): DropdownPickerRequest | null {
   return request;
 }
 
-export function DropdownPickerScreen() {
-  const [request] = useState(consumePendingRequest);
+/** Search box + option list, shared by the Dropdown popup and the
+ *  full-page picker route. */
+export function DropdownPickerList({
+  value,
+  options,
+  searchable,
+  emptyText,
+  onSelect,
+}: {
+  value: string;
+  options: DropdownOption[];
+  searchable: boolean;
+  emptyText: string;
+  onSelect: (value: string) => void;
+}) {
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    // Defensive: opened with nothing pending (stale deep link, fast-refresh
-    // remount, etc.) — there's nothing to show, so bail back out.
-    if (!request) router.back();
-  }, [request]);
-
-  const options = request?.options ?? [];
 
   const filtered = useMemo(() => {
     if (!query.trim()) return options;
@@ -51,6 +56,64 @@ export function DropdownPickerScreen() {
       (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
     );
   }, [options, query]);
+
+  return (
+    <>
+      {searchable ? (
+        <View style={s.searchWrap}>
+          <Ionicons name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            style={s.search}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search…"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      ) : null}
+
+      <FlatList
+        data={filtered}
+        keyExtractor={(it) => it.value}
+        keyboardShouldPersistTaps="handled"
+        style={s.list}
+        contentContainerStyle={s.listContent}
+        ItemSeparatorComponent={() => <View style={s.separator} />}
+        initialNumToRender={20}
+        ListEmptyComponent={
+          <View style={s.empty}>
+            <Text style={s.emptyText}>{emptyText || 'No matches'}</Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const isSelected = item.value === value;
+          return (
+            <TouchableOpacity style={s.option} onPress={() => onSelect(item.value)} activeOpacity={0.7}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.optionLabel, isSelected && { fontFamily: fontFamily.semiBold }]}>
+                  {item.label}
+                </Text>
+                {item.sublabel ? <Text style={s.optionSub}>{item.sublabel}</Text> : null}
+              </View>
+              {isSelected ? <Ionicons name="checkmark" size={18} color={colors.text} /> : null}
+            </TouchableOpacity>
+          );
+        }}
+      />
+    </>
+  );
+}
+
+export function DropdownPickerScreen() {
+  const [request] = useState(consumePendingRequest);
+
+  useEffect(() => {
+    // Defensive: opened with nothing pending (stale deep link, fast-refresh
+    // remount, etc.) — there's nothing to show, so bail back out.
+    if (!request) router.back();
+  }, [request]);
 
   const handleSelect = (val: string) => {
     request?.onSelect(val);
@@ -65,53 +128,12 @@ export function DropdownPickerScreen() {
       scroll={false}
     >
       <View style={s.container}>
-        {request?.searchable ? (
-          <View style={s.searchWrap}>
-            <Ionicons name="search" size={16} color={colors.textMuted} />
-            <TextInput
-              style={s.search}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search…"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoFocus
-            />
-          </View>
-        ) : null}
-
-        <FlatList
-          data={filtered}
-          keyExtractor={(it) => it.value}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={s.listContent}
-          ItemSeparatorComponent={() => <View style={s.separator} />}
-          ListEmptyComponent={
-            <View style={s.empty}>
-              <Text style={s.emptyText}>{request?.emptyText || 'No matches'}</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const isSelected = item.value === request?.value;
-            return (
-              <TouchableOpacity
-                style={s.option}
-                onPress={() => handleSelect(item.value)}
-                activeOpacity={0.7}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[s.optionLabel, isSelected && { fontFamily: fontFamily.semiBold }]}
-                  >
-                    {item.label}
-                  </Text>
-                  {item.sublabel ? <Text style={s.optionSub}>{item.sublabel}</Text> : null}
-                </View>
-                {isSelected ? <Ionicons name="checkmark" size={18} color={colors.text} /> : null}
-              </TouchableOpacity>
-            );
-          }}
+        <DropdownPickerList
+          value={request?.value ?? ''}
+          options={request?.options ?? []}
+          searchable={request?.searchable ?? false}
+          emptyText={request?.emptyText ?? 'No matches'}
+          onSelect={handleSelect}
         />
       </View>
     </Screen>
@@ -132,7 +154,9 @@ const s = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   search: { flex: 1, fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.text, padding: 0 },
-  listContent: { paddingBottom: spacing.xxl },
+  // Shrinks to fit the popup's maxHeight and scrolls; short lists stay short.
+  list: { flexGrow: 0, flexShrink: 1 },
+  listContent: { paddingBottom: spacing.md },
   option: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md },
   optionLabel: { fontFamily: fontFamily.regular, fontSize: fontSize.md, color: colors.text },
   optionSub: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted, marginTop: 2 },

@@ -30,14 +30,22 @@ interface CropCycleState {
   farms: PickerOption[];
   companies: PickerOption[];
   rejectionReasons: PickerOption[];
+  employees: PickerOption[];
+  tasks: PickerOption[];
+  /** Employee linked to the logged-in user ('' when none). */
+  myEmployee: string;
+  /** The logged-in user's company ('' when unknown). */
+  myCompany: string;
   pickersLoading: boolean;
   rejectionReasonsLoading: boolean;
+  peopleLoading: boolean;
 
   load: (filters?: CycleFilters) => Promise<void>;
   setFilters: (next: CycleFilters) => void;
   clearFilters: () => Promise<void>;
   loadPickers: () => Promise<void>;
   loadRejectionReasons: () => Promise<void>;
+  loadPeople: () => Promise<void>;
   createPlanting: (p: NewPlantingPayload) => Promise<Outcome>;
   createCycle: (p: NewCropCyclePayload) => Promise<Outcome>;
   recordUproot: (p: UprootPayload) => Promise<Outcome>;
@@ -56,6 +64,11 @@ export const useCropCycleStore = create<CropCycleState>((set, get) => ({
   farms: [],
   companies: [],
   rejectionReasons: [],
+  employees: [],
+  tasks: [],
+  myEmployee: '',
+  myCompany: '',
+  peopleLoading: false,
   pickersLoading: false,
   rejectionReasonsLoading: false,
 
@@ -93,6 +106,22 @@ export const useCropCycleStore = create<CropCycleState>((set, get) => ({
       set({ greenhouses, varieties, farms, companies, pickersLoading: false });
     } catch {
       set({ pickersLoading: false });
+    }
+  },
+
+  // Employees + Tasks are a few thousand rows each and only Planning and the
+  // audits need them, so they load on demand like rejection reasons.
+  loadPeople: async () => {
+    if (get().peopleLoading) return;
+    set({ peopleLoading: true });
+    try {
+      const [{ employees, me, myCompany }, tasks] = await Promise.all([
+        cropCycleApi.listEmployees(),
+        cropCycleApi.listTasks(),
+      ]);
+      set({ employees, myEmployee: me, myCompany, tasks, peopleLoading: false });
+    } catch {
+      set({ peopleLoading: false });
     }
   },
 

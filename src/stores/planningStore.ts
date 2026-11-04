@@ -11,7 +11,8 @@ import {
 type Outcome = { ok: true; name: string; message: string } | { ok: false; error: string };
 
 interface PlanFilters {
-  greenhouse?: string;
+  farm?: string;
+  greenhouses?: string[];
   plan_year?: number;
   plan_week?: number;
   scope?: 'mine' | 'all';
@@ -26,12 +27,15 @@ interface PlanningState {
 
   detail: PlanDetail | null;
   detailLoading: boolean;
+  /** Header of the last plan created, reused by the next new plan. */
+  lastPlan: { company: string; farm: string; greenhouse: string };
 
   load: (filters?: PlanFilters) => Promise<void>;
   setFilters: (next: PlanFilters) => void;
   clearFilters: () => Promise<void>;
   open: (name: string) => Promise<void>;
   closeDetail: () => void;
+  setLastPlan: (header: { company: string; farm: string; greenhouse: string }) => void;
   save: (p: SavePlanPayload) => Promise<Outcome>;
   updateTask: (p: UpdateTaskPayload) => Promise<Outcome>;
 }
@@ -45,6 +49,7 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   detail: null,
   detailLoading: false,
+  lastPlan: { company: '', farm: '', greenhouse: '' },
 
   load: async (filters) => {
     const active = filters ?? get().filters;
@@ -79,6 +84,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
   },
 
   closeDetail: () => set({ detail: null }),
+
+  setLastPlan: (lastPlan) => set({ lastPlan }),
 
   save: async (payload) => {
     set({ acting: true });

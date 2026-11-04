@@ -216,7 +216,7 @@ export function AgricultureDashboard() {
           </View>
           <View style={s.varianceDivider} />
           <View style={s.varianceStat}>
-            <Text style={s.varianceStatLabel}>Difference</Text>
+            <Text style={s.varianceStatLabel}>Variance</Text>
             <Text
               style={[s.varianceStatNum, difference >= 0 ? s.deltaPos : s.deltaNeg]}
               numberOfLines={1}
