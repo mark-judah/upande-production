@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   release:
-    uses: mark-judah/upande-mobile-kit/.github/workflows/release.yml@v0.15.0
+    uses: mark-judah/upande-mobile-kit/.github/workflows/release.yml@v0.17.0
     with:
       app-name: "Upande Production"
       apk-name: upande_production
