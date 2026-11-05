@@ -1,13 +1,13 @@
 {
-  "id": "2150544c-1fae-4d8b-940f-7d711359671e",
-  "createdAt": "2026-11-05T21:37:29.619Z",
+  "id": "d3ec7f80-e087-45fd-a0a2-14b0c36e0466",
+  "createdAt": "2026-11-05T22:28:14.519Z",
   "runtimeVersion": "101.4",
   "launchAsset": {
-    "hash": "zBnRpv_L_NHfQEI86l2RA5g6dw1vp0j4qmZT9O2XopY",
-    "key": "entry-6faacc50e4c4316012f9f5ea32b95962",
+    "hash": "61lIAQrbDj7ZwBehCcQXaJLRiWZ86Q-JAzRFpTM4NOc",
+    "key": "entry-41c3bd6f290d6aa42b66fd049c4a5803",
     "contentType": "application/javascript",
     "fileExtension": ".hbc",
-    "url": "https://mark-judah.github.io/upande-production/ota/android/101.4/_expo/static/js/android/entry-6faacc50e4c4316012f9f5ea32b95962.hbc"
+    "url": "https://mark-judah.github.io/upande-production/ota/android/101.4/_expo/static/js/android/entry-41c3bd6f290d6aa42b66fd049c4a5803.hbc"
   },
   "assets": [
     {
@@ -611,7 +611,7 @@
     "expoClient": {
       "name": "Upande Production",
       "slug": "upande-production",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "platforms": [
         "ios",
         "android"
@@ -642,7 +642,7 @@
           "android.permission.MODIFY_AUDIO_SETTINGS",
           "android.permission.REQUEST_INSTALL_PACKAGES"
         ],
-        "versionCode": 105401
+        "versionCode": 105402
       },
       "plugins": [
         "./plugins/withReleaseSigning",
@@ -714,7 +714,7 @@
         "backgroundColor": "#FFFFFF"
       }
     },
-    "appVersion": "1.4.1",
-    "publishedAt": "2026-11-05T21:37:29.635Z"
+    "appVersion": "1.4.2",
+    "publishedAt": "2026-11-05T22:28:14.546Z"
   }
 }
