@@ -25,7 +25,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@types/jest": "29.5.14",
-    "@upande/mobile-kit": "github:mark-judah/upande-mobile-kit#v0.17.0",
+    "@upande/mobile-kit": "github:mark-judah/upande-mobile-kit#v0.17.1",
     "axios": "^1.15.2",
     "date-fns": "^4.1.0",
     "expo": "~54.0.33",
