@@ -1,13 +1,13 @@
 {
-  "id": "488894e4-74e7-4b4c-9c30-e139f32b24c7",
-  "createdAt": "2026-11-12T04:13:16.407Z",
+  "id": "851d8280-5cd2-4a85-bea2-6367d8560941",
+  "createdAt": "2026-11-12T04:46:03.632Z",
   "runtimeVersion": "101.2",
   "launchAsset": {
-    "hash": "PiNGToY1FcKtG0iadZSzMguByoTAxuiaZlzmAPScTA4",
-    "key": "entry-f53678be85cd4f80e716ba5a164b483a",
+    "hash": "QI2g6xxW42CnjEyObLpzeD5Lw0Rr6EIvFOQbn4nbeOs",
+    "key": "entry-416f199262079abb3a35a92d2ea93246",
     "contentType": "application/javascript",
     "fileExtension": ".hbc",
-    "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/_expo/static/js/android/entry-f53678be85cd4f80e716ba5a164b483a.hbc"
+    "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/_expo/static/js/android/entry-416f199262079abb3a35a92d2ea93246.hbc"
   },
   "assets": [
     {
@@ -708,6 +708,6 @@
       "sdkVersion": "58.0.0"
     },
     "appVersion": "1.2.0",
-    "publishedAt": "2026-11-12T04:13:16.427Z"
+    "publishedAt": "2026-11-12T04:46:03.657Z"
   }
 }
