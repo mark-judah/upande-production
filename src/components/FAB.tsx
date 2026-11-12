@@ -32,6 +32,9 @@ interface FABProps {
 }
 
 const FAB_SIZE = 56;
+/** Matches the tab bar in app/(tabs)/_layout.tsx (64 + safe-area bottom). */
+const TAB_BAR_HEIGHT = 64;
+const FAB_GAP = 16;
 
 export function FAB({
   icon = 'add',
@@ -60,9 +63,10 @@ export function FAB({
 
   if (!visible) return null;
 
-  // Hug the bottom — only respects the OS safe-area (home indicator /
-  // gesture bar). The FAB will overlap the tab bar.
-  const bottom = insets.bottom - 20;
+  // FABs live inside tab screens, whose area ends at the top of the tab bar,
+  // so `bottom` is measured from there. Sit just above the bar, never over it.
+  const bottom = FAB_GAP;
+  const tabBarHeight = TAB_BAR_HEIGHT + insets.bottom;
 
   // Target position when expanded = top-right corner of the open sheet.
   // If no sheet has reported a top yet, fall back to ~12% from the screen
@@ -70,7 +74,7 @@ export function FAB({
   const screenH = Dimensions.get('window').height;
   const fallbackTop = Math.max(insets.top + 16, screenH * 0.12);
   const cornerTop = (sheetTopY ?? fallbackTop) + 12;
-  const restingTop = screenH - bottom - FAB_SIZE;
+  const restingTop = screenH - tabBarHeight - bottom - FAB_SIZE;
   const translateYDelta = cornerTop - restingTop;
 
   const translateY = progress.interpolate({

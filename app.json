@@ -2,7 +2,7 @@
   "expo": {
     "name": "Upande Production",
     "slug": "upande-production",
-    "version": "1.0.0",
+    "version": "1.4.2",
     "platforms": [
       "ios",
       "android"
@@ -11,6 +11,7 @@
     "icon": "./assets/images/upande_logo.png",
     "scheme": "upandeproduction",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.upande.production",
@@ -22,14 +23,17 @@
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/upande_logo.png"
       },
+      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ],
+      "versionCode": 105402
     },
     "plugins": [
       "./plugins/withReleaseSigning",
@@ -67,15 +71,12 @@
         }
       ],
       "expo-sqlite",
-      "expo-status-bar",
-      "expo-web-browser"
+      "@upande/mobile-kit",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
     },
     "extra": {
       "router": {},
@@ -83,13 +84,21 @@
         "projectId": "4df5ead6-3af2-4da2-864b-2feece7714d4"
       },
       "otaBaseUrl": "https://mark-judah.github.io/upande-production/ota",
+      "mobileKit": {
+        "sites": {
+          "production": "https://kaitet-group.upande.com"
+        },
+        "versionCodeBase": 100000,
+        "runtimeMajorBase": 100
+      },
       "runtimeSdk": 54
     },
     "updates": {
       "enabled": true,
-      "url": "https://mark-judah.github.io/upande-production/ota/android/101.0/manifest.json",
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    }
+      "fallbackToCacheTimeout": 0,
+      "url": "https://kaitet-group.upande.com/api/method/upande_mobile.api.ota.manifest?app=Upande%20Production"
+    },
+    "runtimeVersion": "101.4"
   }
 }

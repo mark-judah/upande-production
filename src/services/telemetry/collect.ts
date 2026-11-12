@@ -4,11 +4,10 @@ import * as Battery from 'expo-battery';
 import * as Application from 'expo-application';
 import * as Network from 'expo-network';
 import * as Cellular from 'expo-cellular';
-import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
 import { Paths } from 'expo-file-system';
 import { storage, StorageKeys } from '@/src/services/storage';
-import { APP_VERSION, INSTALLED_APK_VERSION, RUNTIME_VERSION } from '@/src/services/version';
+import { APP_VERSION, INSTALLED_APK_VERSION } from '@/src/services/version';
 import { getDeviceId } from '@/src/services/device-id';
 
 export type TelemetryPayload = {
@@ -22,14 +21,9 @@ export type TelemetryPayload = {
   os_version: string;
   app_name: string;
   app_version: string;
-  /** Installed APK version (OTA never changes it) and the update runtime. */
+  /** Installed APK version. */
   native_version: string;
-  runtime: string;
   build: string;
-  ota_update_id: string;
-  ota_channel: string;
-  ota_created_at: string;
-  is_embedded: boolean;
   battery_level: number;
   battery_state: string;
   network_type: string;
@@ -94,16 +88,10 @@ export async function collectTelemetry(): Promise<TelemetryPayload> {
     brand: Device.brand ?? '',
     os: Platform.OS,
     os_version: String(Device.osVersion ?? Platform.Version ?? ''),
-    // The running JS version (an OTA bundle's own), not the installed APK's.
     app_name: Application.applicationName ?? Constants.expoConfig?.name ?? '',
     app_version: APP_VERSION,
     native_version: INSTALLED_APK_VERSION,
-    runtime: RUNTIME_VERSION,
     build: Application.nativeBuildVersion ?? '',
-    ota_update_id: Updates.updateId ?? '',
-    ota_channel: (Updates.channel as string) ?? '',
-    ota_created_at: Updates.createdAt ? Updates.createdAt.toISOString() : '',
-    is_embedded: Updates.isEmbeddedLaunch ?? false,
     battery_level: typeof level === 'number' ? level : -1,
     battery_state: BATT[state] ?? 'unknown',
     network_type: NET[netState.type ?? ''] ?? 'unknown',

@@ -1,3 +1,4 @@
+import '../src/mobile-kit';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -13,8 +14,7 @@ import { OfflineBanner } from '@/src/components/OfflineBanner';
 import { useAuthStore } from '@/src/stores/authStore';
 import { useNetworkStore } from '@/src/stores/networkStore';
 import { startTelemetry } from '@/src/services/telemetry/service';
-import { UpdateProvider } from '@/src/services/updates/UpdateProvider';
-import { useUpdateRequiredStore } from '@/src/stores/updateRequiredStore';
+import { MobileKitProvider } from '@upande/mobile-kit';
 
 // Hold the native splash until fonts + auth hydrated.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -32,7 +32,6 @@ export default function RootLayout() {
   const biometricLocked = useAuthStore((s) => s.biometricLocked);
   const hydrate = useAuthStore((s) => s.hydrate);
   const initNetwork = useNetworkStore((s) => s.init);
-  const updateRequired = useUpdateRequiredStore((s) => s.required);
 
   const segments = useSegments();
   const router = useRouter();
@@ -69,27 +68,18 @@ export default function RootLayout() {
       if (first !== 'biometric-lock') router.replace('/biometric-lock');
       return;
     }
-    // The server's minimum-version gate rejected this build: lock to the update screen.
-    if (updateRequired) {
-      if (first !== 'update-required') router.replace('/update-required' as never);
-      return;
-    }
-    if (first === 'update-required') {
-      router.replace('/');
-      return;
-    }
     // Authenticated + unlocked — kick the user out of the auth screens.
     if (inAuthFlow) router.replace('/');
-  }, [hydrated, hasSession, biometricLocked, updateRequired, segments, router]);
+  }, [hydrated, hasSession, biometricLocked, segments, router]);
 
   if (!fontsLoaded || !hydrated) return null;
 
   return (
+    <MobileKitProvider>
     <SafeAreaProvider>
       <KeyboardProvider>
       <StatusBar style="dark" />
       <ToastProvider>
-        <UpdateProvider>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -103,7 +93,6 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="biometric-lock" options={{ animation: 'fade' }} />
           <Stack.Screen name="devices" />
-          <Stack.Screen name="update-required" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen
             name="camera-scanner"
             options={{ presentation: 'fullScreenModal' }}
@@ -116,9 +105,9 @@ export default function RootLayout() {
         <DialogHost />
         {/* Sticky offline indicator across all screens. */}
         <OfflineBanner />
-        </UpdateProvider>
       </ToastProvider>
       </KeyboardProvider>
     </SafeAreaProvider>
+    </MobileKitProvider>
   );
 }
