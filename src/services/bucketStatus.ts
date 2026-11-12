@@ -9,6 +9,7 @@ export interface BucketEntry {
   stemLength: string;
   greenhouse: string;
   cutStage: string;
+  headSize: string;
   /** Display name (falls back to the Employee id if the name can't be resolved). */
   harvester: string;
   qty: number;
@@ -35,6 +36,7 @@ interface RawEntry {
   stem_length?: string;
   greenhouse?: string;
   cut_stage?: string;
+  head_size?: string;
   harvester?: string;
   qty?: number;
   time?: string;
@@ -74,6 +76,7 @@ export const bucketStatusApi = {
         stemLength: String(e.stem_length ?? 'Unspecified'),
         greenhouse: String(e.greenhouse ?? 'Unspecified'),
         cutStage: String(e.cut_stage ?? 'Unspecified'),
+        headSize: String(e.head_size ?? 'Unspecified'),
         harvester: String(e.harvester ?? 'Unspecified'),
         qty: Number(e.qty ?? 0),
         time: String(e.time ?? ''),
@@ -82,7 +85,7 @@ export const bucketStatusApi = {
     };
   },
 
-  /** Corrects a still-pending entry's variety, stem length, cut stage and/or
+  /** Corrects a still-pending entry's variety, stem length, cut stage, head size and/or
    *  quantity via the backend's cancel+amend flow. Only valid while the
    *  bucket's latest journey is unreceived (received === false) -- the
    *  backend re-checks this itself regardless of what the UI shows. */
@@ -91,12 +94,14 @@ export const bucketStatusApi = {
     variety: string;
     stemLength: string;
     cutStage: string;
+    headSize: string;
     qty: number;
   }): Promise<{
     stockEntry: string;
     variety: string;
     stemLength: string;
     cutStage: string;
+    headSize: string;
     qty: number;
     amended: boolean;
   }> {
@@ -106,6 +111,7 @@ export const bucketStatusApi = {
         variety?: string;
         stem_length?: string;
         cut_stage?: string;
+        head_size?: string;
         qty?: number;
         amended?: boolean;
         error?: string;
@@ -120,6 +126,7 @@ export const bucketStatusApi = {
           variety: params.variety,
           stem_length: params.stemLength,
           cut_stage: params.cutStage,
+          head_size: params.headSize,
           qty: params.qty,
         },
       });
@@ -132,6 +139,7 @@ export const bucketStatusApi = {
       variety: String(body.data?.variety ?? params.variety),
       stemLength: String(body.data?.stem_length ?? params.stemLength),
       cutStage: String(body.data?.cut_stage ?? params.cutStage),
+      headSize: String(body.data?.head_size ?? params.headSize),
       qty: Number(body.data?.qty ?? params.qty),
       amended: !!body.data?.amended,
     };

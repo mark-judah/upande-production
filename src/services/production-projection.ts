@@ -7,6 +7,8 @@ export interface ProjectionWeek {
   actualHarvest: number;
   revisedForecast: number;
   customComment: string;
+  /** False within the locked weeks ahead (Production Settings). */
+  editable: boolean;
 }
 
 export interface ProductionProjection {
@@ -45,6 +47,7 @@ interface RawProjection {
       actual_harvest?: number;
       revised_forecast?: number;
       custom_comment?: string;
+      editable?: boolean;
     }>;
     message?: string;
   };
@@ -83,6 +86,8 @@ export interface WeekForecastRow {
 export interface WeekForecastPage {
   total: number;
   filled: number;
+  /** False when this week is inside the locked weeks ahead. */
+  editable: boolean;
   rows: WeekForecastRow[];
 }
 
@@ -92,6 +97,7 @@ interface RawWeekPage {
   message?: {
     total?: number;
     filled?: number;
+    editable?: boolean;
     rows?: { greenhouse?: string; variety?: string; projection_name?: string; flagged?: boolean; week?: RawWeek }[];
   };
 }
@@ -104,6 +110,8 @@ function toWeek(w: RawWeek | undefined): ProjectionWeek {
     actualHarvest: Number(w?.actual_harvest ?? 0),
     revisedForecast: Number(w?.revised_forecast ?? 0),
     customComment: String(w?.custom_comment ?? ''),
+    // Older servers don't send it: keep the week editable there.
+    editable: w?.editable ?? true,
   };
 }
 
@@ -139,6 +147,7 @@ export const productionProjectionApi = {
       return {
         total: Number(m.total ?? 0),
         filled: Number(m.filled ?? 0),
+        editable: m.editable ?? true,
         rows: (m.rows ?? []).map((r) => ({
           greenhouse: String(r.greenhouse ?? ''),
           variety: String(r.variety ?? ''),

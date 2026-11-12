@@ -1,17 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import {
+  KeyboardAvoidingView,
   Animated,
   Dimensions,
   Easing,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSheetBottomPadding } from '@/src/hooks/useSheetBottomPadding';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useUIStore } from '@/src/stores/uiStore';
@@ -41,7 +40,7 @@ export function Sheet({
   hideCloseButton,
   children,
 }: SheetProps) {
-  const insets = useSafeAreaInsets();
+  const sheetBottom = useSheetBottomPadding();
   const screenH = Dimensions.get('window').height;
   const setSheetTopY = useUIStore((s) => s.setSheetTopY);
 
@@ -110,7 +109,7 @@ export function Sheet({
       <KeyboardAvoidingView
         style={s.panelWrap}
         pointerEvents="box-none"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <Animated.View
           onLayout={(e) => {
@@ -119,7 +118,7 @@ export function Sheet({
           }}
           style={[
             s.sheet,
-            { paddingBottom: insets.bottom + spacing.md, transform: [{ translateY: slide }] },
+            { paddingBottom: sheetBottom, transform: [{ translateY: slide }] },
           ]}
         >
           <View style={s.header}>
@@ -141,8 +140,8 @@ export function Sheet({
 }
 
 const s = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject, zIndex: 50, elevation: 8 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  root: { ...StyleSheet.absoluteFill, zIndex: 50, elevation: 8 },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
   panelWrap: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,

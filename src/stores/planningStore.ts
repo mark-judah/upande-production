@@ -2,10 +2,12 @@ import { create } from 'zustand';
 import { mapAxiosError } from '@/src/services/api';
 import {
   planningApi,
+  type PlanAction,
   type PlanDetail,
   type PlanSummary,
   type SavePlanPayload,
   type UpdateTaskPayload,
+  PENDING_STATES,
 } from '@/src/services/planning';
 
 type Outcome = { ok: true; name: string; message: string } | { ok: false; error: string };
@@ -38,6 +40,12 @@ interface PlanningState {
   setLastPlan: (header: { company: string; farm: string; greenhouse: string }) => void;
   save: (p: SavePlanPayload) => Promise<Outcome>;
   updateTask: (p: UpdateTaskPayload) => Promise<Outcome>;
+
+  /** Plans waiting on a manager (Approvals screen). */
+  approvals: PlanSummary[];
+  approvalsLoading: boolean;
+  loadApprovals: () => Promise<void>;
+  runAction: (p: { name: string; action: PlanAction; comment?: string; rating?: number }) => Promise<Outcome>;
 }
 
 export const usePlanningStore = create<PlanningState>((set, get) => ({
@@ -49,6 +57,8 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
 
   detail: null,
   detailLoading: false,
+  approvals: [],
+  approvalsLoading: false,
   lastPlan: { company: '', farm: '', greenhouse: '' },
 
   load: async (filters) => {
@@ -94,6 +104,31 @@ export const usePlanningStore = create<PlanningState>((set, get) => ({
       set({ acting: false });
       get().load();
       return { ok: true, name: r.name, message: r.message };
+    } catch (err) {
+      set({ acting: false });
+      return { ok: false, error: mapAxiosError(err).message };
+    }
+  },
+
+  loadApprovals: async () => {
+    set({ approvalsLoading: true });
+    try {
+      const approvals = await planningApi.list({ limit: 200, scope: 'all', workflow_states: PENDING_STATES });
+      set({ approvals, approvalsLoading: false });
+    } catch (err) {
+      set({ approvalsLoading: false, error: mapAxiosError(err).message });
+    }
+  },
+
+  runAction: async (payload) => {
+    set({ acting: true });
+    try {
+      const r = await planningApi.action(payload);
+      set({ acting: false });
+      if (get().detail?.name === payload.name) await get().open(payload.name);
+      get().load();
+      get().loadApprovals();
+      return { ok: true, name: payload.name, message: r.message };
     } catch (err) {
       set({ acting: false });
       return { ok: false, error: mapAxiosError(err).message };

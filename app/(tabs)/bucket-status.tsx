@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Alert } from '@/src/components/Card';
@@ -38,10 +39,12 @@ export default function BucketStatusScreen() {
   const [editVariety, setEditVariety] = useState('');
   const [editStemLength, setEditStemLength] = useState('');
   const [editCutStage, setEditCutStage] = useState('');
+  const [editHeadSize, setEditHeadSize] = useState('');
   const [editQty, setEditQty] = useState('');
   const [editVarietyOptions, setEditVarietyOptions] = useState<DropdownOption[]>([]);
   const [editStemLengthOptions, setEditStemLengthOptions] = useState<DropdownOption[]>([]);
   const [editCutStageOptions, setEditCutStageOptions] = useState<DropdownOption[]>([]);
+  const [editHeadSizeOptions, setEditHeadSizeOptions] = useState<DropdownOption[]>([]);
   const [editOptionsLoading, setEditOptionsLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
 
@@ -92,16 +95,19 @@ export default function BucketStatusScreen() {
     setEditVariety(entry.variety);
     setEditStemLength(entry.stemLength);
     setEditCutStage(entry.cutStage);
+    setEditHeadSize(entry.headSize === 'Unspecified' ? '' : entry.headSize);
     setEditQty(String(entry.qty));
     setEditVarietyOptions([]);
     setEditStemLengthOptions([]);
     setEditCutStageOptions([]);
+    setEditHeadSizeOptions([]);
     setEditOptionsLoading(true);
     Promise.all([harvestingApi.getGreenhouseData(entry.greenhouse), harvestingApi.listStemLengths()])
       .then(([ghData, stemLengths]) => {
         setEditVarietyOptions(toOptions(ghData.varieties));
         setEditStemLengthOptions(toOptions(stemLengths));
         setEditCutStageOptions(ghData.cutStages.map((c) => ({ value: c, label: c })));
+        setEditHeadSizeOptions(ghData.headSizes.map((h) => ({ value: h, label: h })));
       })
       .catch((err) => showError(err?.message || 'Could not load variety/length options.'))
       .finally(() => setEditOptionsLoading(false));
@@ -126,6 +132,7 @@ export default function BucketStatusScreen() {
         variety: editVariety,
         stemLength: editStemLength,
         cutStage: editCutStage,
+        headSize: editHeadSize,
         qty,
       })
       .then(() => {
@@ -138,9 +145,11 @@ export default function BucketStatusScreen() {
   };
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={s.scroll}
+      keyboardShouldPersistTaps="handled"
+      bottomOffset={40}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Card>
@@ -220,6 +229,14 @@ export default function BucketStatusScreen() {
                             searchable={false}
                           />
                           <View style={{ height: spacing.sm }} />
+                          <Dropdown
+                            label="Head size"
+                            value={editHeadSize}
+                            onChange={setEditHeadSize}
+                            options={editHeadSizeOptions}
+                            searchable={false}
+                          />
+                          <View style={{ height: spacing.sm }} />
                           <LabeledInput
                             label="Number of stems"
                             value={editQty}
@@ -239,7 +256,7 @@ export default function BucketStatusScreen() {
                             loading={editSaving}
                             disabled={
                               editOptionsLoading ||
-                              (!editVariety && !editStemLength && !editCutStage && !editQty)
+                              (!editVariety && !editStemLength && !editCutStage && !editHeadSize && !editQty)
                             }
                           />
                         </View>
@@ -254,7 +271,7 @@ export default function BucketStatusScreen() {
                         {e.greenhouse} · {e.stemLength}
                       </Text>
                       <Text style={s.meta}>
-                        {e.cutStage} · {e.harvester}
+                        {e.cutStage} · {e.headSize} · {e.harvester}
                       </Text>
                       <Text style={s.time}>{formatExactTime(e.time)}</Text>
                     </View>
@@ -276,7 +293,7 @@ export default function BucketStatusScreen() {
           </Card>
         )
       ) : null}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

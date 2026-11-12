@@ -21,6 +21,10 @@ export interface GreenhouseData {
   employees: EmployeeOption[];
   /** Cut stages from the Cut Stage master (fetched with greenhouse data). */
   cutStages: string[];
+  /** Head sizes from the Head Size master (fetched with greenhouse data). */
+  headSizes: string[];
+  /** Production Settings > Enable Head Size Mandatory. */
+  headSizeMandatory: boolean;
   /** Guidance shown when the greenhouse has no crop cycle yet (empty varieties). */
   notice: string | null;
 }
@@ -34,6 +38,7 @@ export interface HarvestPayload {
   item_code: string;
   quantity: number;
   cut_stage: string;
+  head_size: string;
 }
 
 export interface HarvestOutcome {
@@ -46,6 +51,8 @@ interface RawGreenhouseData {
     varieties?: Array<{ variety?: string; area?: number; item_group?: string; is_spray_rose?: boolean }>;
     employees?: Array<{ name?: string; employee_name?: string }>;
     cut_stages?: string[];
+    head_sizes?: string[];
+    head_size_mandatory?: boolean;
     notice?: string | null;
     error?: string;
   };
@@ -79,7 +86,15 @@ export const harvestingApi = {
       label: String(e.employee_name ?? e.name ?? ''),
     }));
     const cutStages = (body.data?.cut_stages ?? []).map((c) => String(c)).filter(Boolean);
-    return { varieties, employees, cutStages, notice: body.data?.notice ?? null };
+    const headSizes = (body.data?.head_sizes ?? []).map((h) => String(h)).filter(Boolean);
+    return {
+      varieties,
+      employees,
+      cutStages,
+      headSizes,
+      headSizeMandatory: !!body.data?.head_size_mandatory,
+      notice: body.data?.notice ?? null,
+    };
   },
 
   /** All Stem Length options (read directly from Frappe REST — no script). */

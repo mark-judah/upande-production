@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   RefreshControl,
@@ -10,8 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSheetBottomPadding } from '@/src/hooks/useSheetBottomPadding';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Alert } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
@@ -201,7 +202,7 @@ function LogActivitySheet({
   batch: PropagationBatch;
   onClose: () => void;
 }) {
-  const insets = useSafeAreaInsets();
+  const sheetBottom = useSheetBottomPadding();
   const { showSuccess, showError } = useToast();
   const acting = usePropagationStore((st) => st.acting);
   const recordLog = usePropagationStore((st) => st.recordLog);
@@ -239,10 +240,10 @@ function LogActivitySheet({
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
+        <View style={[s.sheet, { paddingBottom: sheetBottom }]}>
+          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={40}>
             <SheetHeader
               title="Log activity"
               subtitle={`${batch.varietyName || batch.variety} · ${batch.name}`}
@@ -322,7 +323,7 @@ function LogActivitySheet({
             <Button label="Submit log" loading={acting} onPress={submit} />
           </KeyboardAwareScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -366,7 +367,7 @@ function NewRequestSheet({ visible, onClose }: { visible: boolean; onClose: () =
 
   return (
     <Sheet visible={visible} onClose={onClose} title="New seedling request" hideCloseButton>
-      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={40}>
         <LabeledInput
           label="Required by"
           value={requiredBy}

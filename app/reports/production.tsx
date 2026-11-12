@@ -15,7 +15,14 @@ import { cropCycleApi, type PickerOption } from '@/src/services/crop-cycle';
 import type { VarietyRow } from '@/src/services/reports';
 
 interface MergedLength { stemLength: string; harvested: number; received: number; }
-interface MergedVariety { variety: string; harvested: number; received: number; lengths: MergedLength[]; }
+interface MergedHeadSize { headSize: string; harvested: number; }
+interface MergedVariety {
+  variety: string;
+  harvested: number;
+  received: number;
+  lengths: MergedLength[];
+  headSizes: MergedHeadSize[];
+}
 interface MergedGroup { key: string; harvested: number; received: number; varieties: MergedVariety[]; }
 
 /** Harvested and received side by side: one row per group / variety / stem
@@ -25,6 +32,8 @@ function mergeGroups(
   received: { key: string; varieties: VarietyRow[] }[],
 ): MergedGroup[] {
   const groups = new Map<string, Map<string, Map<string, MergedLength>>>();
+  // Head size is only recorded at harvest, so it comes from the harvested side.
+  const heads = new Map<string, Map<string, number>>();
   const add = (side: 'harvested' | 'received', rows: { key: string; varieties: VarietyRow[] }[]) => {
     for (const g of rows) {
       const vmap = groups.get(g.key) ?? new Map<string, Map<string, MergedLength>>();
@@ -36,6 +45,12 @@ function mergeGroups(
           const row = lmap.get(sl.stemLength) ?? { stemLength: sl.stemLength, harvested: 0, received: 0 };
           row[side] += sl.stems;
           lmap.set(sl.stemLength, row);
+        }
+        if (side === 'harvested') {
+          const hkey = `${g.key}\u0000${v.variety}`;
+          const hmap = heads.get(hkey) ?? new Map<string, number>();
+          heads.set(hkey, hmap);
+          for (const hs of v.headSizes) hmap.set(hs.headSize, (hmap.get(hs.headSize) ?? 0) + hs.stems);
         }
       }
     }
@@ -53,7 +68,10 @@ function mergeGroups(
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([variety, lmap]) => {
           const lengths = [...lmap.values()].sort((a, b) => a.stemLength.localeCompare(b.stemLength));
-          return { variety, lengths, ...sum(lengths) };
+          const headSizes = [...(heads.get(`${key}\u0000${variety}`) ?? new Map<string, number>()).entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([headSize, harvested]) => ({ headSize, harvested }));
+          return { variety, lengths, headSizes, ...sum(lengths) };
         });
       return { key, varieties, ...sum(varieties) };
     });
@@ -212,6 +230,24 @@ export default function ProductionReportScreen() {
                               <Text style={[s.td, s.colNum, s.right, variance(sl) < 0 ? s.neg : variance(sl) > 0 ? s.pos : null]}>
                                 {varianceText(sl)}
                               </Text>
+                            </View>
+                          ))}
+                          {v.headSizes.length > 0 && (
+                            <View style={s.tr}>
+                              <Text style={[s.td, s.colVariety]} />
+                              <Text style={[s.th, s.colLength]}>Head size</Text>
+                              <Text style={[s.td, s.colNum]} />
+                              <Text style={[s.td, s.colNum]} />
+                              <Text style={[s.td, s.colNum]} />
+                            </View>
+                          )}
+                          {v.headSizes.map((hs) => (
+                            <View key={`${gKey}/var:${v.variety}/hs:${hs.headSize}`} style={s.tr}>
+                              <Text style={[s.td, s.colVariety]} />
+                              <Text style={[s.td, s.colLength]}>{hs.headSize}</Text>
+                              <Text style={[s.td, s.colNum, s.right]}>{fmt(hs.harvested)}</Text>
+                              <Text style={[s.td, s.colNum]} />
+                              <Text style={[s.td, s.colNum]} />
                             </View>
                           ))}
                         </View>

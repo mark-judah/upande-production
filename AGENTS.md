@@ -1,8 +1,7 @@
 # Upande Production — agent notes
 
-This app is on **Expo SDK 54** to stay consistent with the rest of the Upande
-fleet (upande-quality, upande-security, the coffee app). For SDK-specific
-API questions read https://docs.expo.dev/versions/v54.0.0/ — not the latest.
+This app is on **Expo SDK 58**. For SDK-specific
+API questions read https://docs.expo.dev/versions/v58.0.0/ — not the latest.
 
 ## Reference docs in this repo and at /home/jk/Documents/
 

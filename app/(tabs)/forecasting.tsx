@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { getISOWeek } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
@@ -155,8 +155,7 @@ export default function ForecastingScreen() {
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        enableOnAndroid
-        extraScrollHeight={20}
+        bottomOffset={20}
       >
         {screenMode === 'thisWeek' ? (
           <ForecastThisWeek

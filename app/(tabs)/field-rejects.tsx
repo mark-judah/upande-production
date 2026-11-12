@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Card, Alert } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { LabeledInput } from '@/src/components/LabeledInput';
@@ -208,7 +208,7 @@ function NewFieldRejectSheet({ visible, onClose }: { visible: boolean; onClose: 
 
   return (
     <Sheet visible={visible} onClose={onClose} title="New field rejection" hideCloseButton>
-      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={40}>
         <Dropdown
           label="Farm"
           value={farm}
