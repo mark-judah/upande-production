@@ -12,6 +12,12 @@ export interface VarietyOption extends PickerOption {
    *  (computed server-side via the real ancestor chain, not a string
    *  match against itemGroup). */
   isSprayRose?: boolean;
+  /** Harvests of this variety need a head size (Production Settings: every
+   *  variety, this variety, or its item group). */
+  headSizeMandatory?: boolean;
+  /** Head size the form starts on for this variety (its Head Size Mandatory For
+   *  row, else Production Settings > Default Head Size). */
+  defaultHeadSize?: string;
 }
 
 export interface EmployeeOption extends PickerOption {}
@@ -23,7 +29,7 @@ export interface GreenhouseData {
   cutStages: string[];
   /** Head sizes from the Head Size master (fetched with greenhouse data). */
   headSizes: string[];
-  /** Production Settings > Enable Head Size Mandatory. */
+  /** Production Settings > Enable Head Size Mandatory: every variety. */
   headSizeMandatory: boolean;
   /** Guidance shown when the greenhouse has no crop cycle yet (empty varieties). */
   notice: string | null;
@@ -48,7 +54,14 @@ export interface HarvestOutcome {
 
 interface RawGreenhouseData {
   data?: {
-    varieties?: Array<{ variety?: string; area?: number; item_group?: string; is_spray_rose?: boolean }>;
+    varieties?: Array<{
+      variety?: string;
+      area?: number;
+      item_group?: string;
+      is_spray_rose?: boolean;
+      head_size_mandatory?: boolean;
+      default_head_size?: string | null;
+    }>;
     employees?: Array<{ name?: string; employee_name?: string }>;
     cut_stages?: string[];
     head_sizes?: string[];
@@ -76,6 +89,8 @@ export const harvestingApi = {
       area: typeof v.area === 'number' ? v.area : undefined,
       itemGroup: v.item_group ? String(v.item_group) : undefined,
       isSprayRose: !!v.is_spray_rose,
+      headSizeMandatory: !!v.head_size_mandatory,
+      defaultHeadSize: v.default_head_size ? String(v.default_head_size) : undefined,
     }));
     // name must be the actual Employee id (custom_harvester/graded_by are
     // Link(Employee) fields elsewhere) -- it was employee_name here, which

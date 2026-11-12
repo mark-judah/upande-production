@@ -205,8 +205,16 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
     if (standardVarieties.length === 1 && !variety) setVariety(standardVarieties[0].name);
   }, [standardVarieties, variety]);
 
+  const selectedVariety = standardVarieties.find((v) => v.name === variety);
+  const needsHeadSize = headSizeMandatory || !!selectedVariety?.headSizeMandatory;
+  const defaultHeadSize = selectedVariety?.defaultHeadSize ?? '';
+
+  useEffect(() => {
+    setHeadSize(defaultHeadSize);
+  }, [variety, defaultHeadSize]);
+
   const submit = async () => {
-    if (!farm || !greenhouse || !variety || !harvester || !stemLength || !bucketId || !quantity || !cutStage || (headSizeMandatory && !headSize)) {
+    if (!farm || !greenhouse || !variety || !harvester || !stemLength || !bucketId || !quantity || !cutStage || (needsHeadSize && !headSize)) {
       showError('Fill all fields.');
       return;
     }
@@ -235,7 +243,7 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
       // Force a deliberate re-pick every submit — don't silently carry over
       // (or auto-select) a cut stage for the next scan.
       setCutStage('');
-      setHeadSize('');
+      setHeadSize(defaultHeadSize);
     } else {
       showError(outcome.error);
     }
