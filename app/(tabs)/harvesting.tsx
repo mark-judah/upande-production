@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { Pressable, RefreshControl, StyleSheet, Text, View, type TextInputInstance } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
 import { Card, Alert } from '@/src/components/Card';
@@ -96,8 +96,7 @@ export default function HarvestingScreen() {
       contentContainerStyle={s.scroll}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
-      enableOnAndroid
-      extraScrollHeight={20}
+      bottomOffset={20}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <Segmented
@@ -162,6 +161,8 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
   const ghDataError = useHarvestingStore((s) => s.ghDataError);
   const ghDataNotice = useHarvestingStore((s) => s.ghDataNotice);
   const cutStages = useHarvestingStore((s) => s.cutStages);
+  const headSizes = useHarvestingStore((s) => s.headSizes);
+  const headSizeMandatory = useHarvestingStore((s) => s.headSizeMandatory);
   const acting = useHarvestingStore((s) => s.acting);
   const loadStemLengths = useHarvestingStore((s) => s.loadStemLengths);
   const loadGreenhouseData = useHarvestingStore((s) => s.loadGreenhouseData);
@@ -171,6 +172,7 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
   const [harvester, setHarvester] = useState('');
   const [stemLength, setStemLength] = useState('');
   const [cutStage, setCutStage] = useState<string>('');
+  const [headSize, setHeadSize] = useState('');
   const [bucketId, setBucketId] = useState('');
   const [quantity, setQuantity] = useState('');
 
@@ -196,14 +198,23 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
     setVariety('');
     setHarvester('');
     setCutStage('');
+    setHeadSize('');
   }, [greenhouse, loadGreenhouseData]);
 
   useEffect(() => {
     if (standardVarieties.length === 1 && !variety) setVariety(standardVarieties[0].name);
   }, [standardVarieties, variety]);
 
+  const selectedVariety = standardVarieties.find((v) => v.name === variety);
+  const needsHeadSize = headSizeMandatory || !!selectedVariety?.headSizeMandatory;
+  const defaultHeadSize = selectedVariety?.defaultHeadSize ?? '';
+
+  useEffect(() => {
+    setHeadSize(defaultHeadSize);
+  }, [variety, defaultHeadSize]);
+
   const submit = async () => {
-    if (!farm || !greenhouse || !variety || !harvester || !stemLength || !bucketId || !quantity || !cutStage) {
+    if (!farm || !greenhouse || !variety || !harvester || !stemLength || !bucketId || !quantity || !cutStage || (needsHeadSize && !headSize)) {
       showError('Fill all fields.');
       return;
     }
@@ -221,6 +232,7 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
       item_code: variety,
       quantity: qty,
       cut_stage: cutStage,
+      head_size: headSize,
     });
     if (outcome.ok) {
       showSuccess(outcome.message);
@@ -231,6 +243,7 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
       // Force a deliberate re-pick every submit — don't silently carry over
       // (or auto-select) a cut stage for the next scan.
       setCutStage('');
+      setHeadSize(defaultHeadSize);
     } else {
       showError(outcome.error);
     }
@@ -310,6 +323,16 @@ function StandardsForm({ farm, greenhouse }: { farm: string; greenhouse: string 
         </View>
       </View>
 
+      <Dropdown
+        label="Head size"
+        value={headSize}
+        onChange={setHeadSize}
+        options={headSizes.map((h) => ({ value: h, label: h }))}
+        placeholder={greenhouse ? 'Select head size' : 'Pick a greenhouse first'}
+        searchable={false}
+      />
+      <View style={{ height: spacing.md }} />
+
       <LabeledInput
         label="Bucket ID"
         value={bucketId}
@@ -380,7 +403,7 @@ function SpraysForm({ farm, greenhouse }: { farm: string; greenhouse: string }) 
   const bucketId = parseScanned(bucketRaw, 'bucket');
   const bunchId = parseScanned(bunchRaw, 'bunch');
 
-  const bunchRef = useRef<TextInput>(null);
+  const bunchRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     if (greenhouse) loadGreenhouseData(greenhouse);
@@ -623,7 +646,7 @@ function ScanStep({
   onChange: (t: string) => void;
   placeholder: string;
   disabled?: boolean;
-  inputRef?: React.RefObject<TextInput | null>;
+  inputRef?: React.RefObject<TextInputInstance | null>;
   onSubmitEditing?: () => void;
   /** Called with the raw scanned payload (JSON or plain text). */
   onScan?: (raw: string) => void;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   RefreshControl,
@@ -10,8 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useSheetBottomPadding } from '@/src/hooks/useSheetBottomPadding';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { getISOWeek, getISOWeekYear } from 'date-fns';
 import { Card, Alert } from '@/src/components/Card';
@@ -30,6 +31,7 @@ import { usePlanningStore } from '@/src/stores/planningStore';
 import { useCropCycleStore } from '@/src/stores/cropCycleStore';
 import {
   DAYS_OF_WEEK,
+  type PlanAction,
   type PlanTask,
   type SavePlanPayload,
   type TaskStatus,
@@ -41,6 +43,29 @@ const STATUS_TONE: Record<string, string> = {
   Done: colors.success,
   Skipped: colors.danger,
 };
+
+const STATE_TONE: Record<string, 'neutral' | 'success' | 'warn' | 'danger'> = {
+  Draft: 'neutral',
+  'Pending Approval': 'warn',
+  Approved: 'success',
+  'Pending Verification': 'warn',
+  Rejected: 'danger',
+  Verified: 'success',
+};
+
+const ACTION_ICON: Record<PlanAction, React.ComponentProps<typeof Ionicons>['name']> = {
+  'Submit for Approval': 'paper-plane-outline',
+  Approve: 'checkmark-circle-outline',
+  Reject: 'close-circle-outline',
+  'Submit for Verification': 'paper-plane-outline',
+  Verify: 'checkmark-done-outline',
+};
+
+export function StatePill({ state, docstatus }: { state: string; docstatus: number }) {
+  const value = state || (docstatus === 1 ? 'Submitted' : '');
+  if (!value) return null;
+  return <Pill value={value} tone={STATE_TONE[value] ?? (docstatus === 1 ? 'success' : 'neutral')} />;
+}
 
 /** One Greenhouse Operations Task row as typed into the app. */
 interface TaskRow { day: string; assignedTask: string; variety: string; purpose: string; target: string; }
@@ -128,7 +153,7 @@ export default function PlanningScreen() {
                 {[p.farm, p.company].filter(Boolean).join(' · ') || '—'}
               </Text>
               <View style={s.rowPills}>
-                {p.docstatus === 1 ? <Pill value="Submitted" tone="success" /> : null}
+                <StatePill state={p.workflowState} docstatus={p.docstatus} />
                 <Pill label="Tasks" value={`${p.tasksDone}/${p.tasksTotal} done`} />
                 <Pill label="Open" value={String(p.tasksOpen)} />
                 {p.plannedStems ? <Pill label="Planned" value={`${p.plannedStems.toLocaleString()} stems`} /> : null}
@@ -209,20 +234,46 @@ function FiltersCard() {
   );
 }
 
-function PlanDetailSheet({ onClose }: { onClose: () => void }) {
-  const insets = useSafeAreaInsets();
+export function PlanDetailSheet({ onClose }: { onClose: () => void }) {
+  const sheetBottom = useSheetBottomPadding();
   const detail = usePlanningStore((st) => st.detail);
   const detailLoading = usePlanningStore((st) => st.detailLoading);
   const [task, setTask] = useState<PlanTask | null>(null);
   const [addingTask, setAddingTask] = useState(false);
+  const [reviewing, setReviewing] = useState<PlanAction | null>(null);
+  const { showSuccess, showError } = useToast();
+  const acting = usePlanningStore((st) => st.acting);
+  const runAction = usePlanningStore((st) => st.runAction);
   if (!detail) return null;
   const locked = detail.docstatus !== 0;
+  const canTapTasks = !locked && detail.canEnterActuals;
+
+  const run = async (action: PlanAction, comment?: string, rating?: number) => {
+    const outcome = await runAction({ name: detail.name, action, comment, rating });
+    if (outcome.ok) {
+      showSuccess(outcome.message);
+      setReviewing(null);
+    } else {
+      showError(outcome.error);
+    }
+  };
+
+  const onAction = (action: PlanAction) => {
+    if (action === 'Approve' || action === 'Reject' || action === 'Verify') {
+      setReviewing(action);
+      return;
+    }
+    showDialog(action, undefined, [
+      { text: 'No', style: 'cancel' },
+      { text: 'Yes', onPress: () => run(action) },
+    ], { name: ACTION_ICON[action], tone: 'success' });
+  };
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+        <View style={[s.sheet, { paddingBottom: sheetBottom }]}>
           <SheetHeader
             title={`W${detail.planWeek} ${detail.planYear} — ${detail.greenhouse}`}
             subtitle={[detail.farm, detail.company, detail.supervisorName].filter(Boolean).join(' · ') || '—'}
@@ -248,9 +299,16 @@ function PlanDetailSheet({ onClose }: { onClose: () => void }) {
               </>
             ) : null}
 
-            {locked ? (
-              <View style={s.rowPills}>
-                <Pill value="Submitted" tone="success" />
+            <View style={s.rowPills}>
+              <StatePill state={detail.workflowState} docstatus={detail.docstatus} />
+              {detail.approvedBy ? <Pill label="Approved by" value={detail.approvedBy} /> : null}
+              {detail.verifiedBy ? <Pill label="Verified by" value={detail.verifiedBy} tone="success" /> : null}
+            </View>
+            {detail.managerComments || detail.qualityRating ? (
+              <View style={[s.reviewBox, detail.workflowState === 'Rejected' && s.reviewBoxRejected]}>
+                <Text style={s.fieldLabel}>{"Manager's review"}</Text>
+                {detail.qualityRating ? <Stars value={detail.qualityRating} /> : null}
+                {detail.managerComments ? <Text style={s.taskMeta}>{detail.managerComments}</Text> : null}
               </View>
             ) : null}
             <Text style={s.sectionTitle}>Greenhouse Operations Task</Text>
@@ -260,7 +318,7 @@ function PlanDetailSheet({ onClose }: { onClose: () => void }) {
               detail.tasks.map((t) => (
                 <Pressable
                   key={t.name}
-                  disabled={locked}
+                  disabled={!canTapTasks}
                   onPress={() => setTask(t)}
                   style={({ pressed }) => [s.taskRow, pressed && { opacity: 0.7 }]}
                 >
@@ -280,36 +338,133 @@ function PlanDetailSheet({ onClose }: { onClose: () => void }) {
               ))
             )}
 
-            {locked ? null : (
+            {!locked && detail.canEditPlan ? (
               <View style={{ marginTop: spacing.md }}>
                 <Button label="Add task" iconLeft="add" variant="outline" onPress={() => setAddingTask(true)} />
               </View>
-            )}
+            ) : null}
+            {detail.actions.length ? (
+              <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                {detail.actions.map((a) => (
+                  <Button
+                    key={a}
+                    label={a}
+                    iconLeft={ACTION_ICON[a]}
+                    variant={a === 'Reject' ? 'outline' : undefined}
+                    onPress={() => onAction(a)}
+                    disabled={acting}
+                  />
+                ))}
+              </View>
+            ) : null}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
       {task ? <TaskStatusSheet plan={detail.name} task={task} onClose={() => setTask(null)} /> : null}
+      {reviewing ? (
+        <ReviewSheet
+          action={reviewing}
+          acting={acting}
+          onSubmit={(comment, rating) => run(reviewing, comment, rating)}
+          onClose={() => setReviewing(null)}
+        />
+      ) : null}
       {addingTask ? <AddTaskSheet plan={detail.name} onClose={() => setAddingTask(false)} /> : null}
     </Modal>
   );
 }
 
+function Stars({ value, onChange }: { value: number; onChange?: (v: number) => void }) {
+  return (
+    <View style={s.stars}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Pressable key={n} disabled={!onChange} onPress={() => onChange?.(n === value ? 0 : n)} hitSlop={6}>
+          <Ionicons name={n <= value ? 'star' : 'star-outline'} size={onChange ? 28 : 18} color={colors.warning} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** Manager's Approve / Reject / Verify, with a comment and a quality rating. */
+function ReviewSheet({
+  action,
+  acting,
+  onSubmit,
+  onClose,
+}: {
+  action: PlanAction;
+  acting: boolean;
+  onSubmit: (comment: string, rating?: number) => void;
+  onClose: () => void;
+}) {
+  const sheetBottom = useSheetBottomPadding();
+  const { showError } = useToast();
+  const [comment, setComment] = useState('');
+  const [rating, setRating] = useState(0);
+  const rates = action !== 'Approve';
+
+  const submit = () => {
+    if (action === 'Reject' && !comment.trim()) {
+      showError('Add a comment on why this plan is rejected.');
+      return;
+    }
+    onSubmit(comment.trim(), rates && rating ? rating : undefined);
+  };
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={s.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[s.sheet, { paddingBottom: sheetBottom }]}>
+          <SheetHeader title={action} onClose={onClose} />
+          {rates ? (
+            <>
+              <Text style={s.fieldLabel}>Quality of work</Text>
+              <Stars value={rating} onChange={setRating} />
+            </>
+          ) : null}
+          <Text style={[s.fieldLabel, { marginTop: spacing.md }]}>
+            {action === 'Reject' ? 'Comment (required)' : 'Comment'}
+          </Text>
+          <TextInput
+            value={comment}
+            onChangeText={setComment}
+            multiline
+            numberOfLines={3}
+            placeholderTextColor={colors.textMuted}
+            style={s.textarea}
+          />
+          <View style={{ marginTop: spacing.md }}>
+            <Button
+              label={action}
+              iconLeft={ACTION_ICON[action]}
+              variant={action === 'Reject' ? 'outline' : undefined}
+              onPress={submit}
+              loading={acting}
+            />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 function TaskStatusSheet({ plan, task, onClose }: { plan: string; task: PlanTask; onClose: () => void }) {
-  const insets = useSafeAreaInsets();
+  const sheetBottom = useSheetBottomPadding();
   const { showSuccess, showError } = useToast();
   const acting = usePlanningStore((st) => st.acting);
   const updateTask = usePlanningStore((st) => st.updateTask);
   const [remarks, setRemarks] = useState(task.supervisorsRemarks ?? '');
   const [actual, setActual] = useState(task.actual ? String(task.actual) : '');
 
-  const setStatus = async (status: TaskStatus, submit = false) => {
+  const setStatus = async (status: TaskStatus) => {
     const outcome = await updateTask({
       plan,
       task: task.name,
       status,
       supervisors_remarks: remarks,
       actual: actual ? Number(actual) : undefined,
-      submit,
     });
     if (outcome.ok) {
       showSuccess(outcome.message);
@@ -319,24 +474,14 @@ function TaskStatusSheet({ plan, task, onClose }: { plan: string; task: PlanTask
     }
   };
 
-  const confirmDone = () =>
-    showDialog(
-      'Mark as done',
-      'Marking as done will submit this Production Plan.',
-      [
-        { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => setStatus('Done', true) },
-      ],
-      { name: 'checkmark-done-outline', tone: 'success' },
-    );
 
   const achievement = task.target && actual ? Math.round((Number(actual) * 10000) / task.target) / 100 : 0;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+        <View style={[s.sheet, { paddingBottom: sheetBottom }]}>
           <SheetHeader
             title={task.taskName}
             subtitle={[task.day, task.variety, `now ${task.status}`].filter(Boolean).join(' · ')}
@@ -363,7 +508,7 @@ function TaskStatusSheet({ plan, task, onClose }: { plan: string; task: PlanTask
           />
           <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
             {task.status !== 'Done' ? (
-              <Button label="Mark done" iconLeft="checkmark" onPress={confirmDone} disabled={acting} />
+              <Button label="Mark done" iconLeft="checkmark" onPress={() => setStatus('Done')} disabled={acting} />
             ) : (
               <Button label="Save" iconLeft="save-outline" onPress={() => setStatus('Done')} disabled={acting} />
             )}
@@ -375,7 +520,7 @@ function TaskStatusSheet({ plan, task, onClose }: { plan: string; task: PlanTask
             ) : null}
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -414,7 +559,7 @@ function TaskRowFields({ row, onChange }: { row: TaskRow; onChange: (patch: Part
 }
 
 function AddTaskSheet({ plan, onClose }: { plan: string; onClose: () => void }) {
-  const insets = useSafeAreaInsets();
+  const sheetBottom = useSheetBottomPadding();
   const { showSuccess, showError } = useToast();
   const acting = usePlanningStore((st) => st.acting);
   const save = usePlanningStore((st) => st.save);
@@ -438,10 +583,10 @@ function AddTaskSheet({ plan, onClose }: { plan: string; onClose: () => void }) 
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
+        <View style={[s.sheet, { paddingBottom: sheetBottom }]}>
+          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={40}>
             <SheetHeader title="Add task" subtitle={plan} onClose={onClose} />
             <View style={{ gap: spacing.xs }}>
               <TaskRowFields row={row} onChange={(patch) => setRow((r) => ({ ...r, ...patch }))} />
@@ -451,13 +596,13 @@ function AddTaskSheet({ plan, onClose }: { plan: string; onClose: () => void }) 
             </View>
           </KeyboardAwareScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 function NewPlanSheet({ onClose }: { onClose: () => void }) {
-  const insets = useSafeAreaInsets();
+  const sheetBottom = useSheetBottomPadding();
   const { showSuccess, showError } = useToast();
   const acting = usePlanningStore((st) => st.acting);
   const save = usePlanningStore((st) => st.save);
@@ -552,10 +697,10 @@ function NewPlanSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={s.overlay}>
+      <KeyboardAvoidingView behavior="padding" style={s.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
-          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
+        <View style={[s.sheet, { paddingBottom: sheetBottom }]}>
+          <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={40}>
             <SheetHeader title="New weekly plan" onClose={onClose} />
             <View style={{ gap: spacing.xs }}>
               <Dropdown
@@ -614,7 +759,7 @@ function NewPlanSheet({ onClose }: { onClose: () => void }) {
             </View>
           </KeyboardAwareScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -657,6 +802,15 @@ const s = StyleSheet.create({
   rowSub: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
   rowPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
 
+  reviewBox: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceAlt,
+    gap: spacing.xs,
+  },
+  reviewBoxRejected: { borderWidth: 1, borderColor: colors.danger },
+  stars: { flexDirection: 'row', gap: spacing.xs, marginVertical: spacing.xs },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,

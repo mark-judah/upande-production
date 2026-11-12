@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { DropdownPickerList } from './DropdownPickerScreen';
@@ -64,7 +64,7 @@ export function Dropdown({
       {/* A centered popup rather than a pushed page: it also works from inside
           the bottom sheets (themselves Modals), which a route push sits behind. */}
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView style={s.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={s.backdrop} behavior="padding">
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
           <View style={s.popup}>
             <View style={s.popupHeader}>

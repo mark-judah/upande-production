@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useFonts, DMSans_400Regular, DMSans_500Medium } from '@expo-google-fonts/dm-sans';
 import { Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import * as SplashScreen from 'expo-splash-screen';
@@ -76,6 +77,7 @@ export default function RootLayout() {
   return (
     <MobileKitProvider>
     <SafeAreaProvider>
+      <KeyboardProvider>
       <StatusBar style="dark" />
       <ToastProvider>
         <Stack
@@ -104,6 +106,7 @@ export default function RootLayout() {
         {/* Sticky offline indicator across all screens. */}
         <OfflineBanner />
       </ToastProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
     </MobileKitProvider>
   );

@@ -1,7 +1,14 @@
 import { api } from '@/src/services/api';
 
 export interface StemLengthRow { stemLength: string; stems: number; }
-export interface VarietyRow { variety: string; stems: number; stemLengths: StemLengthRow[]; }
+export interface HeadSizeRow { headSize: string; stems: number; }
+export interface VarietyRow {
+  variety: string;
+  stems: number;
+  stemLengths: StemLengthRow[];
+  /** Harvested stems by head size. Empty for the received side. */
+  headSizes: HeadSizeRow[];
+}
 export interface FarmRow { farm: string; stems: number; varieties: VarietyRow[]; }
 export interface GreenhouseRow { greenhouse: string; stems: number; varieties: VarietyRow[]; }
 export interface HarvestReport {
@@ -19,6 +26,7 @@ type RawVariety = {
   variety?: string;
   stems?: number;
   stem_lengths?: Array<{ stem_length?: string; stems?: number }>;
+  head_sizes?: Array<{ head_size?: string; stems?: number }>;
 };
 type RawFarm = { farm?: string; stems?: number; varieties?: RawVariety[] };
 type RawGreenhouse = { greenhouse?: string; stems?: number; varieties?: RawVariety[] };
@@ -43,6 +51,10 @@ const mapVarieties = (raw: RawVariety[] | undefined): VarietyRow[] =>
     stemLengths: (v.stem_lengths ?? []).map((sl) => ({
       stemLength: String(sl.stem_length ?? 'Unspecified'),
       stems: Number(sl.stems ?? 0),
+    })),
+    headSizes: (v.head_sizes ?? []).map((hs) => ({
+      headSize: String(hs.head_size ?? 'Unspecified'),
+      stems: Number(hs.stems ?? 0),
     })),
   }));
 

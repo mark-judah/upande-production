@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,7 +56,7 @@ export default function ForecastGreenhouseScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [variety, setVariety] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('edit');
-  const [editedForecasts, setEditedForecasts] = useState<Record<string, number>>({});
+  const [editedForecasts, setEditedForecasts] = useState<Record<string, string>>({});
   const [editedComments, setEditedComments] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function ForecastGreenhouseScreen() {
       (acc, w) => ({
         budget: acc.budget + w.projectedQty,
         actual: acc.actual + w.actualHarvest,
-        revised: acc.revised + (editedForecasts[w.name] ?? w.revisedForecast),
+        revised: acc.revised + (editedForecasts[w.name] !== undefined ? Number(editedForecasts[w.name]) || 0 : w.revisedForecast),
       }),
       { budget: 0, actual: 0, revised: 0 },
     );
@@ -112,13 +112,19 @@ export default function ForecastGreenhouseScreen() {
 
   const onSave = async () => {
     if (!projection) return;
-    if (needsComment && !lastWeekCommentDraft.trim()) {
+    // The variance comment belongs to last week's row: it only blocks a save
+    // that changes last week, not revisions to the weeks ahead.
+    const touchesLastWeek =
+      !!lastWeek && (editedForecasts[lastWeek.name] !== undefined || editedComments[lastWeek.name] !== undefined);
+    if (needsComment && touchesLastWeek && !lastWeekCommentDraft.trim()) {
       showError('A comment is required for last week (variance ≥ 10%).');
       return;
     }
     const rows: ProjectionUpdateRow[] = [];
     for (const [name, value] of Object.entries(editedForecasts)) {
-      rows.push({ name, revised_forecast: value });
+      // A box cleared and left empty is not a change.
+      if (value === '') continue;
+      rows.push({ name, revised_forecast: Number(value) });
     }
     for (const [name, comment] of Object.entries(editedComments)) {
       const existing = rows.find((r) => r.name === name);
@@ -156,8 +162,7 @@ export default function ForecastGreenhouseScreen() {
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        enableOnAndroid
-        extraScrollHeight={20}
+        bottomOffset={20}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {ghDataLoading ? (
@@ -248,7 +253,9 @@ export default function ForecastGreenhouseScreen() {
             {projection.weeks.map((w) => {
               const isCurrent = w.weekNo === currentWeek;
               const edited = editedForecasts[w.name];
-              const currentRevised = edited ?? w.revisedForecast;
+              // Kept as typed text, so clearing the box to type a new number
+              // shows it empty instead of snapping back to the saved value.
+              const revisedText = edited ?? (w.revisedForecast ? String(w.revisedForecast) : '');
               const pctOfBudget = w.projectedQty > 0 ? Math.round((w.actualHarvest / w.projectedQty) * 100) : 0;
               const weekVariance = w.actualHarvest - w.projectedQty;
               const varianceColor = weekVariance > 0 ? colors.success : weekVariance < 0 ? colors.error : colors.textMuted;
@@ -258,6 +265,9 @@ export default function ForecastGreenhouseScreen() {
                   <View style={s.weekHeader}>
                     <Text style={s.weekNo}>W{w.weekNo}</Text>
                     {isCurrent ? <Pill value="NOW" tone="success" /> : null}
+                    {viewMode === 'edit' && !w.editable ? (
+                      <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+                    ) : null}
                   </View>
 
                   {viewMode === 'edit' ? (
@@ -272,22 +282,19 @@ export default function ForecastGreenhouseScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.metricLabel}>Revised</Text>
                         <TextInput
-                          value={String(currentRevised || '')}
-                          onChangeText={(t) => {
-                            const n = Number(t);
-                            if (t === '') {
-                              setEditedForecasts((p) => {
-                                const { [w.name]: _, ...rest } = p;
-                                return rest;
-                              });
-                            } else if (Number.isFinite(n)) {
-                              setEditedForecasts((p) => ({ ...p, [w.name]: n }));
-                            }
-                          }}
+                          value={revisedText}
+                          editable={w.editable}
+                          onChangeText={(t) =>
+                            setEditedForecasts((p) => ({ ...p, [w.name]: t.replace(/[^0-9]/g, '') }))
+                          }
                           keyboardType="number-pad"
                           placeholder="—"
                           placeholderTextColor={colors.textMuted}
-                          style={[s.revisedInput, edited !== undefined && s.revisedInputEdited]}
+                          style={[
+                            s.revisedInput,
+                            edited !== undefined && s.revisedInputEdited,
+                            !w.editable && s.revisedInputLocked,
+                          ]}
                         />
                       </View>
                     </View>
@@ -433,6 +440,8 @@ const s = StyleSheet.create({
     backgroundColor: colors.background, borderRadius: borderRadius.sm,
     borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 6,
   },
+  revisedInputLocked: { backgroundColor: colors.surfaceAlt, color: colors.textMuted },
+
   revisedInputEdited: { borderColor: colors.primary, backgroundColor: '#F0F9FF' },
 
   saveBtn: {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View, type TextInputInstance } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, fontFamily, fontSize, shadow, spacing } from '@/src/theme';
 import { useToast } from '@/src/components/Toast';
@@ -60,7 +60,7 @@ export function ForecastThisWeek({
   const [comments, setComments] = useState<Record<string, string>>({});
   const [rowStatus, setRowStatus] = useState<Record<string, RowStatus>>({});
 
-  const inputRefs = useRef<Record<string, TextInput | null>>({});
+  const inputRefs = useRef<Record<string, TextInputInstance | null>>({});
   const loadSeq = useRef(0);
   // Guards against out-of-order save responses: if a row is blurred twice in
   // quick succession, only the response to the LAST save should be allowed
@@ -236,6 +236,7 @@ export function ForecastThisWeek({
                     inputRefs.current[row.key] = el;
                   }}
                   value={draft}
+                  editable={row.week.editable}
                   onChangeText={(t) => setDrafts((p) => ({ ...p, [row.key]: t.replace(/[^0-9]/g, '') }))}
                   onBlur={() => saveRow(row)}
                   onSubmitEditing={() => {
@@ -246,18 +247,22 @@ export function ForecastThisWeek({
                   keyboardType="number-pad"
                   placeholder="—"
                   placeholderTextColor={colors.textMuted}
-                  style={s.revisedInput}
+                  style={[s.revisedInput, !row.week.editable && s.revisedInputLocked]}
                 />
-                <TouchableOpacity
-                  onPress={() => {
-                    const budgetVal = row.week.projectedQty;
-                    setDrafts((p) => ({ ...p, [row.key]: String(budgetVal) }));
-                    saveRow(row, budgetVal);
-                  }}
-                  style={s.sameChip}
-                >
-                  <Text style={s.sameChipText}>= Budget</Text>
-                </TouchableOpacity>
+                {row.week.editable ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      const budgetVal = row.week.projectedQty;
+                      setDrafts((p) => ({ ...p, [row.key]: String(budgetVal) }));
+                      saveRow(row, budgetVal);
+                    }}
+                    style={s.sameChip}
+                  >
+                    <Text style={s.sameChipText}>= Budget</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+                )}
               </View>
             </View>
           );
@@ -325,6 +330,8 @@ const s = StyleSheet.create({
     backgroundColor: colors.background, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.border,
     paddingHorizontal: spacing.sm, paddingVertical: 6,
   },
+  revisedInputLocked: { backgroundColor: colors.surfaceAlt, color: colors.textMuted },
+
   sameChip: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: borderRadius.sm, backgroundColor: colors.surfaceAlt },
   sameChipText: { fontFamily: fontFamily.medium, fontSize: 10, color: colors.textSecondary },
 

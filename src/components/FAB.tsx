@@ -117,7 +117,7 @@ export function FAB({
       <Animated.View
         pointerEvents="none"
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           s.surfaceLayer,
           { opacity: surfaceOpacity },
         ]}

@@ -17,6 +17,11 @@ const ICONS: Record<string, TabIconPair> = {
   'greenhouse-ops': { outline: 'shield-checkmark-outline', filled: 'shield-checkmark' },
 };
 
+const DRAWER_ONLY = {
+  tabBarButton: () => null,
+  tabBarItemStyle: { display: 'none' as const },
+};
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const openDrawer = useUIStore((s) => s.openDrawer);
@@ -77,13 +82,15 @@ export default function TabLayout() {
       <Tabs.Screen name="propagation" options={{ title: 'Propagation' }} />
       <Tabs.Screen name="greenhouse-ops" options={{ title: 'Greenhouse Audits' }} />
 
-      {/* Drawer-only — hide from bottom bar but keep route in stack */}
-      <Tabs.Screen name="trials" options={{ title: 'Trials', href: null }} />
-      <Tabs.Screen name="forecasting" options={{ title: 'Forecasting', href: null }} />
-      <Tabs.Screen name="planning" options={{ title: 'Planning', href: null }} />
-      <Tabs.Screen name="field-rejects" options={{ title: 'Field Rejects', href: null }} />
-      <Tabs.Screen name="greenhouse-specs" options={{ title: 'Greenhouse Specs', href: null }} />
-      <Tabs.Screen name="bucket-status" options={{ title: 'Bucket Status', href: null }} />
+      {/* Drawer-only — no tab button, but still a navigable route. `href: null`
+          now hides the route itself and redirects it to the first tab. */}
+      <Tabs.Screen name="trials" options={{ title: 'Trials', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="forecasting" options={{ title: 'Forecasting', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="planning" options={{ title: 'Planning', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="approvals" options={{ title: 'Approvals', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="field-rejects" options={{ title: 'Field Rejects', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="greenhouse-specs" options={{ title: 'Greenhouse Specs', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="bucket-status" options={{ title: 'Bucket Status', ...DRAWER_ONLY }} />
     </Tabs>
   );
 }

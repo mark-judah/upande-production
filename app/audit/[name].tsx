@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -276,8 +276,7 @@ export default function AuditScreen() {
         <KeyboardAwareScrollView
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
-          enableOnAndroid
-          extraScrollHeight={40}
+          bottomOffset={40}
         >
           <Card title={typeLabel}>
             <View style={{ gap: spacing.xs }} pointerEvents={readOnly ? 'none' : 'auto'}>
