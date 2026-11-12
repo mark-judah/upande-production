@@ -1,15 +1,22 @@
 {
-  "id": "f850a220-4394-4f7a-a08b-d7abef072bdf",
-  "createdAt": "2026-11-04T23:32:02.685Z",
+  "id": "488894e4-74e7-4b4c-9c30-e139f32b24c7",
+  "createdAt": "2026-11-12T04:13:16.407Z",
   "runtimeVersion": "101.2",
   "launchAsset": {
-    "hash": "-IwR3_s3G6FjCMJa_C_NJBdtGx6_0xOiTjJ-bQfOIGY",
-    "key": "entry-7909e8f7a796e453f8aa45568280e32b",
+    "hash": "PiNGToY1FcKtG0iadZSzMguByoTAxuiaZlzmAPScTA4",
+    "key": "entry-f53678be85cd4f80e716ba5a164b483a",
     "contentType": "application/javascript",
     "fileExtension": ".hbc",
-    "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/_expo/static/js/android/entry-7909e8f7a796e453f8aa45568280e32b.hbc"
+    "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/_expo/static/js/android/entry-f53678be85cd4f80e716ba5a164b483a.hbc"
   },
   "assets": [
+    {
+      "hash": "mtuMXvypMuK3MrKT2oE70uMZUiYwVrzp4lF_7A8LanY",
+      "key": "0a328cd9c1afd0afe8e3b1ec5165b1b4",
+      "contentType": "application/octet-stream",
+      "fileExtension": ".png",
+      "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/0a328cd9c1afd0afe8e3b1ec5165b1b4"
+    },
     {
       "hash": "i2Gkx-9w3JJ1PwSUl2SC9m_UFQ7CPfx3KrZeEDc6-lU",
       "key": "778ffc9fe8773a878e9c30a6304784de",
@@ -37,13 +44,6 @@
       "contentType": "application/octet-stream",
       "fileExtension": ".png",
       "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/35ba0eaec5a4f5ed12ca16fabeae451d"
-    },
-    {
-      "hash": "mtuMXvypMuK3MrKT2oE70uMZUiYwVrzp4lF_7A8LanY",
-      "key": "0a328cd9c1afd0afe8e3b1ec5165b1b4",
-      "contentType": "application/octet-stream",
-      "fileExtension": ".png",
-      "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/0a328cd9c1afd0afe8e3b1ec5165b1b4"
     },
     {
       "hash": "yGu0he7mh-BsUA_EI09RpnhLRTDCrhHQx2SBEQvOMQU",
@@ -74,13 +74,6 @@
       "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/d8e7601e3df962f83c62371ac14964d8"
     },
     {
-      "hash": "yGu0he7mh-BsUA_EI09RpnhLRTDCrhHQx2SBEQvOMQU",
-      "key": "3cd68ccdb8938e3711da2e8831b85493",
-      "contentType": "application/octet-stream",
-      "fileExtension": ".png",
-      "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/3cd68ccdb8938e3711da2e8831b85493"
-    },
-    {
       "hash": "IyXFOnPlTEOMu8YN_92LUT1HG6QuL1ZxPvQEuV4Mofw",
       "key": "0747a1317bbe9c6fc340b889ef8ab3ae",
       "contentType": "application/octet-stream",
@@ -107,13 +100,6 @@
       "contentType": "application/octet-stream",
       "fileExtension": ".png",
       "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/78c625386b4d0690b421eb0fc78f7b9c"
-    },
-    {
-      "hash": "IyXFOnPlTEOMu8YN_92LUT1HG6QuL1ZxPvQEuV4Mofw",
-      "key": "0747a1317bbe9c6fc340b889ef8ab3ae",
-      "contentType": "application/octet-stream",
-      "fileExtension": ".png",
-      "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/0747a1317bbe9c6fc340b889ef8ab3ae"
     },
     {
       "hash": "unIvskv_CkxS5lbN8gXerFxd-F5briv20wcTvVDG1fc",
@@ -149,6 +135,20 @@
       "contentType": "application/octet-stream",
       "fileExtension": ".png",
       "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/d1ea1496f9057eb392d5bbf3732a61b7"
+    },
+    {
+      "hash": "5T8eafhi5ZX10RnAQoY_8qRE_kKZbSK7q4drMAc9D7o",
+      "key": "98a4e3d00dbf5d65da99a69b38a7def2",
+      "contentType": "application/octet-stream",
+      "fileExtension": ".xml",
+      "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/98a4e3d00dbf5d65da99a69b38a7def2"
+    },
+    {
+      "hash": "_aPxg66F5jvLznCnQnbqIgMyroQfdGw3CwsqtANVo1c",
+      "key": "9b5cb09b4e669ed0f28f3b3f2871a0a5",
+      "contentType": "application/octet-stream",
+      "fileExtension": ".xml",
+      "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/assets/9b5cb09b4e669ed0f28f3b3f2871a0a5"
     },
     {
       "hash": "ppou21tsYLhDPVttI8afUgzNimAvP2DnmW5Ilxi8F1w",
@@ -620,7 +620,6 @@
       "icon": "./assets/images/upande_logo.png",
       "scheme": "upandeproduction",
       "userInterfaceStyle": "light",
-      "newArchEnabled": true,
       "ios": {
         "supportsTablet": true,
         "bundleIdentifier": "com.upande.production",
@@ -632,14 +631,15 @@
           "backgroundColor": "#FFFFFF",
           "foregroundImage": "./assets/images/upande_logo.png"
         },
-        "edgeToEdgeEnabled": true,
         "predictiveBackGestureEnabled": false,
         "permissions": [
           "android.permission.CAMERA",
           "android.permission.USE_BIOMETRIC",
           "android.permission.USE_FINGERPRINT",
           "android.permission.RECORD_AUDIO",
-          "android.permission.MODIFY_AUDIO_SETTINGS"
+          "android.permission.MODIFY_AUDIO_SETTINGS",
+          "android.permission.FOREGROUND_SERVICE",
+          "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
         ],
         "versionCode": 105200
       },
@@ -679,41 +679,35 @@
           }
         ],
         "expo-sqlite",
-        "@upande/mobile-kit",
-        "expo-localization"
+        "expo-status-bar",
+        "expo-web-browser"
       ],
       "experiments": {
         "typedRoutes": true,
         "reactCompiler": true
       },
+      "runtimeVersion": "101.2",
       "extra": {
-        "router": {},
+        "router": {
+          "asyncRoutes": {
+            "web": true
+          }
+        },
         "eas": {
           "projectId": "4df5ead6-3af2-4da2-864b-2feece7714d4"
         },
         "otaBaseUrl": "https://mark-judah.github.io/upande-production/ota",
-        "mobileKit": {
-          "sites": {
-            "production": "https://kaitet-group.upande.com"
-          },
-          "versionCodeBase": 100000,
-          "runtimeMajorBase": 100
-        },
-        "runtimeSdk": 54
+        "runtimeSdk": 58
       },
       "updates": {
         "enabled": true,
+        "url": "https://mark-judah.github.io/upande-production/ota/android/101.2/manifest.json",
         "checkAutomatically": "ON_LOAD",
-        "fallbackToCacheTimeout": 0,
-        "url": "https://kaitet-group.upande.com/api/method/upande_mobile.api.ota.manifest?app=Upande%20Production"
+        "fallbackToCacheTimeout": 0
       },
-      "runtimeVersion": "101.2",
-      "sdkVersion": "54.0.0",
-      "androidStatusBar": {
-        "backgroundColor": "#FFFFFF"
-      }
+      "sdkVersion": "58.0.0"
     },
     "appVersion": "1.2.0",
-    "publishedAt": "2026-11-04T23:32:02.707Z"
+    "publishedAt": "2026-11-12T04:13:16.427Z"
   }
 }
