@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { loggedAxios } from './api';
 
 /**
  * Resolve a bare hostname (e.g. "kaitet-group.upande.com") to a full base URL.
@@ -12,7 +12,7 @@ export async function probeBaseUrl(rawUrl: string): Promise<string> {
 
   const httpsUrl = `https://${trimmed}`;
   try {
-    await axios.head(httpsUrl, { timeout: 5000 });
+    await loggedAxios().head(httpsUrl, { timeout: 5000 });
     return httpsUrl;
   } catch {
     return `http://${trimmed}`;

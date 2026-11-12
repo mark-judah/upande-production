@@ -29,6 +29,10 @@ interface HarvestingState {
   ghDataError: string | null;
   /** Cut stages fetched with greenhouse data (from the Cut Stage master). */
   cutStages: string[];
+  /** Head sizes fetched with greenhouse data (from the Head Size master). */
+  headSizes: string[];
+  /** Production Settings > Enable Head Size Mandatory. */
+  headSizeMandatory: boolean;
   /** Guidance from the backend when the greenhouse has no crop cycle yet. */
   ghDataNotice: string | null;
   /** Greenhouse currently cached in `varieties` + `employees`. */
@@ -56,6 +60,8 @@ export const useHarvestingStore = create<HarvestingState>((set, get) => ({
   ghDataLoading: false,
   ghDataError: null,
   cutStages: [],
+  headSizes: [],
+  headSizeMandatory: false,
   ghDataNotice: null,
   cachedGreenhouse: null,
 
@@ -92,8 +98,9 @@ export const useHarvestingStore = create<HarvestingState>((set, get) => ({
     if (get().cachedGreenhouse === greenhouse) return;
     set({ ghDataLoading: true, ghDataError: null, ghDataNotice: null, varieties: [], employees: [] });
     try {
-      const { varieties, employees, cutStages, notice } = await harvestingApi.getGreenhouseData(greenhouse);
-      set({ varieties, employees, cutStages, ghDataNotice: notice, ghDataLoading: false, cachedGreenhouse: greenhouse });
+      const { varieties, employees, cutStages, headSizes, headSizeMandatory, notice } =
+        await harvestingApi.getGreenhouseData(greenhouse);
+      set({ varieties, employees, cutStages, headSizes, headSizeMandatory, ghDataNotice: notice, ghDataLoading: false, cachedGreenhouse: greenhouse });
     } catch (err) {
       set({ ghDataError: mapAxiosError(err).message, ghDataLoading: false });
     }
@@ -112,6 +119,6 @@ export const useHarvestingStore = create<HarvestingState>((set, get) => ({
   },
 
   resetGreenhouseData: () => set({
-    varieties: [], employees: [], cutStages: [], cachedGreenhouse: null, ghDataError: null, ghDataNotice: null,
+    varieties: [], employees: [], cutStages: [], headSizes: [], headSizeMandatory: false, cachedGreenhouse: null, ghDataError: null, ghDataNotice: null,
   }),
 }));

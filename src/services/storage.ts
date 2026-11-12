@@ -26,15 +26,15 @@ export type StorageKey = (typeof StorageKeys)[keyof typeof StorageKeys];
 // isn't available on web, so fall back to AsyncStorage there.
 const SECURE_KEYS: string[] = [StorageKeys.passwordBackup];
 const secureAvailable = Platform.OS !== 'web';
-const useSecure = (key: string): boolean => secureAvailable && SECURE_KEYS.includes(key);
+const isSecureKey = (key: string): boolean => secureAvailable && SECURE_KEYS.includes(key);
 
 export const storage = {
   get: (key: string): Promise<string | null> =>
-    useSecure(key) ? SecureStore.getItemAsync(key) : AsyncStorage.getItem(key),
+    isSecureKey(key) ? SecureStore.getItemAsync(key) : AsyncStorage.getItem(key),
   set: (key: string, value: string): Promise<void> =>
-    useSecure(key) ? SecureStore.setItemAsync(key, value) : AsyncStorage.setItem(key, value),
+    isSecureKey(key) ? SecureStore.setItemAsync(key, value) : AsyncStorage.setItem(key, value),
   remove: (key: string): Promise<void> =>
-    useSecure(key) ? SecureStore.deleteItemAsync(key) : AsyncStorage.removeItem(key),
+    isSecureKey(key) ? SecureStore.deleteItemAsync(key) : AsyncStorage.removeItem(key),
   async clearExcept(keep: string[]): Promise<void> {
     const allKeys = Object.values(StorageKeys);
     await Promise.all(allKeys.filter((k) => !keep.includes(k)).map((k) => storage.remove(k)));

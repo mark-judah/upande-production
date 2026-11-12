@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Card, Alert } from '@/src/components/Card';
@@ -317,7 +317,7 @@ function PlantingSheet({ visible, onClose }: { visible: boolean; onClose: () => 
       subtitle="Start a new crop cycle"
       hideCloseButton
     >
-      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} enableOnAndroid extraScrollHeight={40}>
+      <KeyboardAwareScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={40}>
         <Dropdown
           label="Greenhouse"
           value={greenhouse}

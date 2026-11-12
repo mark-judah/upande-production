@@ -1,7 +1,14 @@
 import { api } from '@/src/services/api';
 
 export interface StemLengthRow { stemLength: string; stems: number; }
-export interface VarietyRow { variety: string; stems: number; stemLengths: StemLengthRow[]; }
+export interface HeadSizeRow { headSize: string; stems: number; }
+export interface VarietyRow {
+  variety: string;
+  stems: number;
+  stemLengths: StemLengthRow[];
+  /** Harvested stems by head size. Empty for the received side. */
+  headSizes: HeadSizeRow[];
+}
 export interface FarmRow { farm: string; stems: number; varieties: VarietyRow[]; }
 export interface GreenhouseRow { greenhouse: string; stems: number; varieties: VarietyRow[]; }
 export interface HarvestReport {
@@ -19,6 +26,7 @@ type RawVariety = {
   variety?: string;
   stems?: number;
   stem_lengths?: Array<{ stem_length?: string; stems?: number }>;
+  head_sizes?: Array<{ head_size?: string; stems?: number }>;
 };
 type RawFarm = { farm?: string; stems?: number; varieties?: RawVariety[] };
 type RawGreenhouse = { greenhouse?: string; stems?: number; varieties?: RawVariety[] };
@@ -44,15 +52,20 @@ const mapVarieties = (raw: RawVariety[] | undefined): VarietyRow[] =>
       stemLength: String(sl.stem_length ?? 'Unspecified'),
       stems: Number(sl.stems ?? 0),
     })),
+    headSizes: (v.head_sizes ?? []).map((hs) => ({
+      headSize: String(hs.head_size ?? 'Unspecified'),
+      stems: Number(hs.stems ?? 0),
+    })),
   }));
 
 export const reportsApi = {
-  /** Harvest broken down by farm/greenhouse → variety → stem length for a single day. */
-  async harvestReport(date: string, farm?: string): Promise<HarvestReport> {
+  /** Harvest broken down by farm/greenhouse → variety → stem length, for one
+   *  day or an inclusive from..to range. */
+  async harvestReport(fromDate: string, toDate: string, farm?: string): Promise<HarvestReport> {
     const body = await api<RawReport>({
       method: 'POST',
       url: '/api/method/upande_agriculture.mobile.api.productionHarvestReport',
-      data: { date, ...(farm ? { farm } : {}) },
+      data: { from_date: fromDate, to_date: toDate, ...(farm ? { farm } : {}) },
     });
     const mapFarms = (raw: RawFarm[] | undefined): FarmRow[] =>
       (raw ?? []).map((f) => ({
@@ -67,7 +80,7 @@ export const reportsApi = {
         varieties: mapVarieties(g.varieties),
       }));
     return {
-      date: String(body.data?.date ?? date),
+      date: String(body.data?.date ?? fromDate),
       totalStems: Number(body.data?.total_stems ?? 0),
       farms: mapFarms(body.data?.farms),
       greenhouses: mapGreenhouses(body.data?.greenhouses),

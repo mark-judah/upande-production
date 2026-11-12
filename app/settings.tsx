@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { showDialog } from '@/src/components/DialogHost';
 import { useRouter } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { Card } from '@/src/components/Card';
@@ -34,14 +35,14 @@ export default function SettingsScreen() {
   const onToggleBiometric = async () => {
     if (!biometricEnabled) {
       if (!moduleReady) {
-        Alert.alert(
+        showDialog(
           'Update needed',
           'Install the latest build of Upande Production to enable biometric unlock.',
         );
         return;
       }
       if (!hardwareReady) {
-        Alert.alert(
+        showDialog(
           'Biometric unavailable',
           'Enroll a fingerprint or face in your device settings, then try again.',
         );
@@ -63,7 +64,7 @@ export default function SettingsScreen() {
   };
 
   const onSignOut = () => {
-    Alert.alert('Sign out?', 'You can sign back in with biometrics or your password.', [
+    showDialog('Sign out?', 'You can sign back in with biometrics or your password.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out',
@@ -77,7 +78,7 @@ export default function SettingsScreen() {
   };
 
   const onForgetDevice = () => {
-    Alert.alert(
+    showDialog(
       'Forget this device?',
       'This clears your session and disables biometric unlock. You will need your password to sign back in.',
       [

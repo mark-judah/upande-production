@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'jest-expo',
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/scripts/'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     '^@react-native-async-storage/async-storage$':

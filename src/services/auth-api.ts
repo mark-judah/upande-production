@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { api } from './api';
+import { api, loggedAxios } from './api';
 import { storage, StorageKeys } from './storage';
 import { probeBaseUrl } from './url';
 
@@ -45,7 +44,7 @@ export async function loginToServer(
   let userId = email;
 
   // ── Preferred: mobileLogin → sid in the body ──
-  const mres = await axios.post(
+  const mres = await loggedAxios().post(
     `${baseUrl}/api/method/upande_packhouse.mobile.api.mobileLogin`,
     { usr: email, pwd: password },
     { headers: { 'Content-Type': 'application/json' }, timeout: 15000, validateStatus: () => true },
@@ -54,16 +53,19 @@ export async function loginToServer(
     const msg: any = (mres.data && ((mres.data as any).message ?? mres.data)) || {};
     sid = (msg.sid as string) ?? null;
     userId = (msg.user_id as string) ?? email;
-  } else if (mres.status === 401 || mres.status === 403) {
+  } else if (mres.status === 401) {
     // Genuine bad credentials — surface it, don't fall through.
     throw new Error(extractError(mres.data) || 'Invalid email or password.');
   }
-  // Any other status (e.g. 404 — endpoint not deployed on this instance) → fall back.
+  // Any other status → fall back to stock login, which reports bad credentials
+  // itself. That covers 404 (endpoint not deployed) and 403 (a PermissionError
+  // from a gateway/before_request hook rejecting the Guest call before it
+  // reaches mobileLogin — NOT a credentials problem).
 
   // ── Fallback: stock /api/method/login + Set-Cookie parse ──
   if (!sid) {
     const body = new URLSearchParams({ usr: email, pwd: password }).toString();
-    const res = await axios.post(`${baseUrl}/api/method/login`, body, {
+    const res = await loggedAxios().post(`${baseUrl}/api/method/login`, body, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       timeout: 15000,
       validateStatus: () => true,

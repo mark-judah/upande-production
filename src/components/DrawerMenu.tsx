@@ -21,6 +21,8 @@ interface NavItem {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
   route: string;
+  /** Shown only to users holding one of these roles. */
+  roles?: string[];
 }
 
 /** Items shown in the drawer (covers everything — tabs that already appear in
@@ -31,11 +33,17 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Crop Cycle', icon: 'leaf-outline', route: '/crop-cycle' },
   { label: 'Harvesting', icon: 'cut-outline', route: '/harvesting' },
   { label: 'Propagation', icon: 'sparkles-outline', route: '/propagation' },
-  { label: 'Greenhouse Ops', icon: 'shield-checkmark-outline', route: '/greenhouse-ops' },
+  { label: 'Greenhouse Audits', icon: 'shield-checkmark-outline', route: '/greenhouse-ops' },
   { label: 'Greenhouse Specs', icon: 'home-outline', route: '/greenhouse-specs' },
   { label: 'Trials', icon: 'flask-outline', route: '/trials' },
   { label: 'Forecasting', icon: 'trending-up-outline', route: '/forecasting' },
   { label: 'Planning', icon: 'calendar-outline', route: '/planning' },
+  {
+    label: 'Approvals',
+    icon: 'checkmark-done-circle-outline',
+    route: '/approvals',
+    roles: ['Agriculture Manager', 'Farm Manager'],
+  },
   { label: 'Field Rejects', icon: 'warning-outline', route: '/field-rejects' },
   { label: 'Reports', icon: 'bar-chart-outline', route: '/reports' },
   { label: 'Bucket Status', icon: 'cube-outline', route: '/bucket-status' },
@@ -50,6 +58,8 @@ export function DrawerMenu() {
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
   const logout = useAuthStore((s) => s.logout);
+  const hasRole = useAuthStore((s) => s.hasRole);
+  const navItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.some((r) => hasRole(r)));
 
   const drawerWidth = Math.min(Math.max(screenWidth * 0.8, 240), 320);
   const slide = useRef(new Animated.Value(-drawerWidth)).current;
@@ -140,7 +150,7 @@ export function DrawerMenu() {
             </View>
 
             <View style={s.nav}>
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <TouchableOpacity
                   key={item.route}
                   style={s.navItem}
@@ -179,7 +189,7 @@ export function DrawerMenu() {
 
 const s = StyleSheet.create({
   overlay: { flex: 1 },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.overlay },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.overlay },
   drawer: {
     position: 'absolute',
     top: 0,

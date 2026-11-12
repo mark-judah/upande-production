@@ -7,28 +7,91 @@ import { Card, Alert } from '@/src/components/Card';
 import { Dropdown } from '@/src/components/Dropdown';
 import { Segmented } from '@/src/components/Segmented';
 import { Spinner } from '@/src/components/Spinner';
-import { DateSelector } from '@/src/components/DateSelector';
+import { DateRangeField } from '@/src/components/DateRangeField';
 import { useToast } from '@/src/components/Toast';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
 import { useReportsStore } from '@/src/stores/reportsStore';
 import { cropCycleApi, type PickerOption } from '@/src/services/crop-cycle';
 import type { VarietyRow } from '@/src/services/reports';
 
+interface MergedLength { stemLength: string; harvested: number; received: number; }
+interface MergedHeadSize { headSize: string; harvested: number; }
+interface MergedVariety {
+  variety: string;
+  harvested: number;
+  received: number;
+  lengths: MergedLength[];
+  headSizes: MergedHeadSize[];
+}
+interface MergedGroup { key: string; harvested: number; received: number; varieties: MergedVariety[]; }
+
+/** Harvested and received side by side: one row per group / variety / stem
+ *  length present on either side. */
+function mergeGroups(
+  harvested: { key: string; varieties: VarietyRow[] }[],
+  received: { key: string; varieties: VarietyRow[] }[],
+): MergedGroup[] {
+  const groups = new Map<string, Map<string, Map<string, MergedLength>>>();
+  // Head size is only recorded at harvest, so it comes from the harvested side.
+  const heads = new Map<string, Map<string, number>>();
+  const add = (side: 'harvested' | 'received', rows: { key: string; varieties: VarietyRow[] }[]) => {
+    for (const g of rows) {
+      const vmap = groups.get(g.key) ?? new Map<string, Map<string, MergedLength>>();
+      groups.set(g.key, vmap);
+      for (const v of g.varieties) {
+        const lmap = vmap.get(v.variety) ?? new Map<string, MergedLength>();
+        vmap.set(v.variety, lmap);
+        for (const sl of v.stemLengths) {
+          const row = lmap.get(sl.stemLength) ?? { stemLength: sl.stemLength, harvested: 0, received: 0 };
+          row[side] += sl.stems;
+          lmap.set(sl.stemLength, row);
+        }
+        if (side === 'harvested') {
+          const hkey = `${g.key}\u0000${v.variety}`;
+          const hmap = heads.get(hkey) ?? new Map<string, number>();
+          heads.set(hkey, hmap);
+          for (const hs of v.headSizes) hmap.set(hs.headSize, (hmap.get(hs.headSize) ?? 0) + hs.stems);
+        }
+      }
+    }
+  };
+  add('harvested', harvested);
+  add('received', received);
+  const sum = (rows: { harvested: number; received: number }[]) => ({
+    harvested: rows.reduce((a, r) => a + r.harvested, 0),
+    received: rows.reduce((a, r) => a + r.received, 0),
+  });
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, vmap]) => {
+      const varieties = [...vmap.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([variety, lmap]) => {
+          const lengths = [...lmap.values()].sort((a, b) => a.stemLength.localeCompare(b.stemLength));
+          const headSizes = [...(heads.get(`${key}\u0000${variety}`) ?? new Map<string, number>()).entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([headSize, harvested]) => ({ headSize, harvested }));
+          return { variety, lengths, headSizes, ...sum(lengths) };
+        });
+      return { key, varieties, ...sum(varieties) };
+    });
+}
+
 export default function ProductionReportScreen() {
   const router = useRouter();
   const { showError } = useToast();
-  const date = useReportsStore((s) => s.date);
+  const fromDate = useReportsStore((s) => s.fromDate);
+  const toDate = useReportsStore((s) => s.toDate);
   const farm = useReportsStore((s) => s.farm);
   const report = useReportsStore((s) => s.report);
   const loading = useReportsStore((s) => s.loading);
   const error = useReportsStore((s) => s.error);
-  const setDate = useReportsStore((s) => s.setDate);
+  const setRange = useReportsStore((s) => s.setRange);
   const setFarm = useReportsStore((s) => s.setFarm);
   const load = useReportsStore((s) => s.load);
 
   const [farms, setFarms] = useState<PickerOption[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [mode, setMode] = useState<'harvested' | 'received'>('harvested');
   const [groupBy, setGroupBy] = useState<'farm' | 'greenhouse'>('farm');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -40,7 +103,7 @@ export default function ProductionReportScreen() {
   }, []);
   useEffect(() => {
     load();
-  }, [date, farm, load]);
+  }, [fromDate, toDate, farm, load]);
   useEffect(() => {
     if (error) showError(error);
   }, [error, showError]);
@@ -63,20 +126,23 @@ export default function ProductionReportScreen() {
     });
 
   const fmt = (n: number) => n.toLocaleString();
-  const activeTotal = report ? (mode === 'harvested' ? report.totalStems : report.receivedTotalStems) : 0;
-  // Farm and greenhouse rows carry the same shape (stems + varieties), just
-  // under a different label field -- normalize to one shape so the drill-down
-  // below doesn't need to branch on groupBy at all.
-  const activeGroups: Array<{ key: string; label: string; stems: number; varieties: VarietyRow[] }> = report
-    ? (groupBy === 'farm'
-        ? (mode === 'harvested' ? report.farms : report.receivedFarms).map((f) => ({
-            key: f.farm, label: f.farm, stems: f.stems, varieties: f.varieties,
-          }))
-        : (mode === 'harvested' ? report.greenhouses : report.receivedGreenhouses).map((g) => ({
-            key: g.greenhouse, label: g.greenhouse, stems: g.stems, varieties: g.varieties,
-          })))
+  const groups: MergedGroup[] = report
+    ? groupBy === 'farm'
+      ? mergeGroups(
+          report.farms.map((f) => ({ key: f.farm, varieties: f.varieties })),
+          report.receivedFarms.map((f) => ({ key: f.farm, varieties: f.varieties })),
+        )
+      : mergeGroups(
+          report.greenhouses.map((g) => ({ key: g.greenhouse, varieties: g.varieties })),
+          report.receivedGreenhouses.map((g) => ({ key: g.greenhouse, varieties: g.varieties })),
+        )
     : [];
-  const isEmpty = !loading && report != null && activeGroups.length === 0;
+  const variance = (r: { harvested: number; received: number }) => r.received - r.harvested;
+  const varianceText = (r: { harvested: number; received: number }) => {
+    const v = variance(r);
+    return `${v > 0 ? '+' : ''}${fmt(v)}`;
+  };
+  const isEmpty = !loading && report != null && groups.length === 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
@@ -93,7 +159,7 @@ export default function ProductionReportScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <Card>
-          <DateSelector value={date} onChange={setDate} label="Harvest date" />
+          <DateRangeField label="Harvest date" from={fromDate} to={toDate} onChange={setRange} />
           <Dropdown
             label="Farm"
             value={farm}
@@ -102,15 +168,6 @@ export default function ProductionReportScreen() {
             placeholder="All farms"
           />
         </Card>
-
-        <Segmented
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'harvested', label: 'Harvested' },
-            { value: 'received', label: 'Received' },
-          ]}
-        />
 
         <Segmented
           value={groupBy}
@@ -126,20 +183,22 @@ export default function ProductionReportScreen() {
         ) : isEmpty ? (
           <Card>
             <Alert tone="info">
-              No {mode === 'harvested' ? 'harvest' : 'receiving'} recorded for this date.
+              No harvest or receiving recorded for {fromDate === toDate ? 'this date' : 'these dates'}.
             </Alert>
           </Card>
         ) : report ? (
           <Card>
-            {activeGroups.map((g, gi) => {
-              const gKey = `${mode}/${groupBy}:${g.key}`;
+            {groups.map((g, gi) => {
+              const gKey = `${groupBy}:${g.key}`;
               const gOpen = !collapsed.has(gKey);
               return (
                 <View key={gKey} style={gi > 0 ? { marginTop: spacing.lg } : undefined}>
                   <Pressable style={s.farmRow} onPress={() => toggle(gKey)}>
                     <Ionicons name={gOpen ? 'chevron-down' : 'chevron-forward'} size={16} color={colors.text} />
-                    <Text style={s.farmName}>{g.label}</Text>
-                    <Text style={s.farmStems}>{fmt(g.stems)} stems</Text>
+                    <Text style={s.farmName}>{g.key}</Text>
+                    <Text style={[s.farmStems, variance(g) < 0 ? s.neg : variance(g) > 0 ? s.pos : null]}>
+                      {varianceText(g)}
+                    </Text>
                   </Pressable>
 
                   {gOpen && (
@@ -147,20 +206,48 @@ export default function ProductionReportScreen() {
                       <View style={[s.tr, s.thead]}>
                         <Text style={[s.th, s.colVariety]}>Variety</Text>
                         <Text style={[s.th, s.colLength]}>Length</Text>
-                        <Text style={[s.th, s.colStems, s.right]}>Stems</Text>
+                        <Text style={[s.th, s.colNum, s.right]}>Harv.</Text>
+                        <Text style={[s.th, s.colNum, s.right]}>Recv.</Text>
+                        <Text style={[s.th, s.colNum, s.right]}>Var.</Text>
                       </View>
                       {g.varieties.map((v) => (
                         <View key={`${gKey}/var:${v.variety}`}>
                           <View style={[s.tr, s.varHead]}>
                             <Text style={[s.tdVariety, s.colVariety]}>{v.variety}</Text>
                             <Text style={[s.td, s.colLength]} />
-                            <Text style={[s.tdVariety, s.colStems, s.right]}>{fmt(v.stems)}</Text>
+                            <Text style={[s.tdVariety, s.colNum, s.right]}>{fmt(v.harvested)}</Text>
+                            <Text style={[s.tdVariety, s.colNum, s.right]}>{fmt(v.received)}</Text>
+                            <Text style={[s.tdVariety, s.colNum, s.right, variance(v) < 0 ? s.neg : variance(v) > 0 ? s.pos : null]}>
+                              {varianceText(v)}
+                            </Text>
                           </View>
-                          {v.stemLengths.map((sl) => (
+                          {v.lengths.map((sl) => (
                             <View key={`${gKey}/var:${v.variety}/sl:${sl.stemLength}`} style={s.tr}>
                               <Text style={[s.td, s.colVariety]} />
                               <Text style={[s.td, s.colLength]}>{sl.stemLength}</Text>
-                              <Text style={[s.td, s.colStems, s.right]}>{fmt(sl.stems)}</Text>
+                              <Text style={[s.td, s.colNum, s.right]}>{fmt(sl.harvested)}</Text>
+                              <Text style={[s.td, s.colNum, s.right]}>{fmt(sl.received)}</Text>
+                              <Text style={[s.td, s.colNum, s.right, variance(sl) < 0 ? s.neg : variance(sl) > 0 ? s.pos : null]}>
+                                {varianceText(sl)}
+                              </Text>
+                            </View>
+                          ))}
+                          {v.headSizes.length > 0 && (
+                            <View style={s.tr}>
+                              <Text style={[s.td, s.colVariety]} />
+                              <Text style={[s.th, s.colLength]}>Head size</Text>
+                              <Text style={[s.td, s.colNum]} />
+                              <Text style={[s.td, s.colNum]} />
+                              <Text style={[s.td, s.colNum]} />
+                            </View>
+                          )}
+                          {v.headSizes.map((hs) => (
+                            <View key={`${gKey}/var:${v.variety}/hs:${hs.headSize}`} style={s.tr}>
+                              <Text style={[s.td, s.colVariety]} />
+                              <Text style={[s.td, s.colLength]}>{hs.headSize}</Text>
+                              <Text style={[s.td, s.colNum, s.right]}>{fmt(hs.harvested)}</Text>
+                              <Text style={[s.td, s.colNum]} />
+                              <Text style={[s.td, s.colNum]} />
                             </View>
                           ))}
                         </View>
@@ -171,8 +258,23 @@ export default function ProductionReportScreen() {
               );
             })}
             <View style={s.totalRow}>
-              <Text style={s.totalLabel}>{mode === 'harvested' ? 'Total harvested' : 'Total received'}</Text>
-              <Text style={s.totalStems}>{fmt(activeTotal)} stems</Text>
+              <Text style={s.totalLabel}>Total harvested</Text>
+              <Text style={s.totalStems}>{fmt(report.totalStems)} stems</Text>
+            </View>
+            <View style={s.subTotalRow}>
+              <Text style={s.totalLabel}>Total received</Text>
+              <Text style={s.totalStems}>{fmt(report.receivedTotalStems)} stems</Text>
+            </View>
+            <View style={s.subTotalRow}>
+              <Text style={s.totalLabel}>Variance</Text>
+              <Text
+                style={[
+                  s.totalStems,
+                  report.receivedTotalStems - report.totalStems < 0 ? s.neg : report.receivedTotalStems - report.totalStems > 0 ? s.pos : null,
+                ]}
+              >
+                {varianceText({ harvested: report.totalStems, received: report.receivedTotalStems })} stems
+              </Text>
             </View>
           </Card>
         ) : null}
@@ -213,10 +315,13 @@ const s = StyleSheet.create({
   tdVariety: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
   colVariety: { flex: 1.4 },
   colLength: { flex: 1 },
-  colStems: { width: 72 },
+  colNum: { width: 56 },
+  pos: { color: colors.success },
+  neg: { color: colors.danger },
   right: { textAlign: 'right' },
 
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 2, borderTopColor: colors.border },
+  subTotalRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs },
   totalLabel: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
   totalStems: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.primary },
 });

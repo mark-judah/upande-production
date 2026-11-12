@@ -6,10 +6,11 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, fontFamily, fontSize, shadow, spacing } from '@/src/theme';
@@ -35,7 +36,7 @@ export default function LoginScreen() {
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
 
-  const passwordRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     (async () => {
@@ -90,8 +91,7 @@ export default function LoginScreen() {
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        enableOnAndroid
-        extraScrollHeight={40}
+        bottomOffset={40}
       >
           <View style={s.hero}>
             <View style={s.logoCircle}>

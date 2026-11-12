@@ -4,7 +4,7 @@ Upande Production ships like Upande Packhouse and Upande Quality: every merge to
 `master` advances the version one step and either publishes a **JS update (OTA)** or
 builds a **signed APK**. A server-side **minimum-version gate** stops out-of-date
 builds from sending data, and the **Devices** screen (Support Team) shows who is
-behind. Expo SDK 54.
+behind. Expo SDK 58.
 
 ```
 branch ──▶ PR to master ──▶ PR Checks ──▶ merge ──▶ Release ─┬─▶ 1.0.x : OTA on GitHub Pages

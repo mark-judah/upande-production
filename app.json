@@ -11,7 +11,6 @@
     "icon": "./assets/images/upande_logo.png",
     "scheme": "upandeproduction",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.upande.production",
@@ -23,7 +22,6 @@
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/upande_logo.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -69,7 +67,9 @@
           "faceIDPermission": "Allow Upande Production to use Face ID for biometric unlock."
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

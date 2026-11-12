@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -156,8 +156,7 @@ export default function ForecastGreenhouseScreen() {
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        enableOnAndroid
-        extraScrollHeight={20}
+        bottomOffset={20}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {ghDataLoading ? (
@@ -258,6 +257,9 @@ export default function ForecastGreenhouseScreen() {
                   <View style={s.weekHeader}>
                     <Text style={s.weekNo}>W{w.weekNo}</Text>
                     {isCurrent ? <Pill value="NOW" tone="success" /> : null}
+                    {viewMode === 'edit' && !w.editable ? (
+                      <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+                    ) : null}
                   </View>
 
                   {viewMode === 'edit' ? (
@@ -273,6 +275,7 @@ export default function ForecastGreenhouseScreen() {
                         <Text style={s.metricLabel}>Revised</Text>
                         <TextInput
                           value={String(currentRevised || '')}
+                          editable={w.editable}
                           onChangeText={(t) => {
                             const n = Number(t);
                             if (t === '') {
@@ -287,7 +290,11 @@ export default function ForecastGreenhouseScreen() {
                           keyboardType="number-pad"
                           placeholder="—"
                           placeholderTextColor={colors.textMuted}
-                          style={[s.revisedInput, edited !== undefined && s.revisedInputEdited]}
+                          style={[
+                            s.revisedInput,
+                            edited !== undefined && s.revisedInputEdited,
+                            !w.editable && s.revisedInputLocked,
+                          ]}
                         />
                       </View>
                     </View>
@@ -433,6 +440,8 @@ const s = StyleSheet.create({
     backgroundColor: colors.background, borderRadius: borderRadius.sm,
     borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.sm, paddingVertical: 6,
   },
+  revisedInputLocked: { backgroundColor: colors.surfaceAlt, color: colors.textMuted },
+
   revisedInputEdited: { borderColor: colors.primary, backgroundColor: '#F0F9FF' },
 
   saveBtn: {

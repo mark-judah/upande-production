@@ -216,7 +216,7 @@ export function AgricultureDashboard() {
           </View>
           <View style={s.varianceDivider} />
           <View style={s.varianceStat}>
-            <Text style={s.varianceStatLabel}>Difference</Text>
+            <Text style={s.varianceStatLabel}>Variance</Text>
             <Text
               style={[s.varianceStatNum, difference >= 0 ? s.deltaPos : s.deltaNeg]}
               numberOfLines={1}
@@ -376,7 +376,7 @@ function GreenhouseRow({
               return (
                 <Pressable
                   key={v.variety}
-                  style={({ pressed }) => [s.varietyRow, pressed && hasMissing && { opacity: 0.6 }]}
+                  style={({ pressed }) => [s.varietyBreakdownRow, pressed && hasMissing && { opacity: 0.6 }]}
                   disabled={!hasMissing}
                   delayLongPress={400}
                   onLongPress={() => hasMissing && onShowMissing(v)}
@@ -610,7 +610,7 @@ const s = StyleSheet.create({
 
   varietyLoading: { paddingVertical: spacing.md, alignItems: 'center' },
   varietyList: { paddingTop: spacing.xs, paddingBottom: spacing.sm },
-  varietyRow: {
+  varietyBreakdownRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: spacing.xs + 2,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
