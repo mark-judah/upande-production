@@ -18,6 +18,7 @@ configureMobileKit({
   site: 'https://kaitet-group.upande.com',
   // Add a local one with  site: { production: 'https://your.site', development: 'http://localhost:8000' }
   biometric: 'host', // your app already locks itself with expo-local-authentication; the kit adds no lock of its own
+  connectionBanner: false, // the app's own one-line offline banner (src/components/OfflineBanner) is used instead
   // apk: { autoDownload: 'wifi' }, // 'wifi' (default) | 'always' | 'never'
   // fab: true, // the floating Settings button: true (default) | false | 'dev' | { initialSide: 'left', bottom: 96 }
   //

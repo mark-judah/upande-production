@@ -87,6 +87,7 @@ export default function TabLayout() {
       <Tabs.Screen name="trials" options={{ title: 'Trials', ...DRAWER_ONLY }} />
       <Tabs.Screen name="forecasting" options={{ title: 'Forecasting', ...DRAWER_ONLY }} />
       <Tabs.Screen name="planning" options={{ title: 'Planning', ...DRAWER_ONLY }} />
+      <Tabs.Screen name="sea-freight" options={{ title: 'Sea Freight', ...DRAWER_ONLY }} />
       <Tabs.Screen name="approvals" options={{ title: 'Approvals', ...DRAWER_ONLY }} />
       <Tabs.Screen name="field-rejects" options={{ title: 'Field Rejects', ...DRAWER_ONLY }} />
       <Tabs.Screen name="greenhouse-specs" options={{ title: 'Greenhouse Specs', ...DRAWER_ONLY }} />

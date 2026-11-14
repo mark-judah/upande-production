@@ -45,6 +45,9 @@ export interface HarvestPayload {
   quantity: number;
   cut_stage: string;
   head_size: string;
+  /** Sea freight harvest: the Sales Order and its line this harvest is for. */
+  sales_order?: string;
+  sales_order_item?: string;
 }
 
 export interface HarvestOutcome {
