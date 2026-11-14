@@ -13,6 +13,8 @@ export const StorageKeys = {
   apkUpdateCheck: 'apk_update_check',
   userRoles: 'userRoles',
   biometricEnabled: 'biometric_enabled',
+  // The Sea Freight page's farm / greenhouse filter, so a farm keeps seeing its own orders.
+  seaFreightFilter: 'sea_freight_filter',
   // Password, kept in the OS secure enclave. Fed back into the login endpoint to
   // silently re-authenticate when the server session expires (403 session_expired)
   // and to re-authenticate behind the biometric unlock.

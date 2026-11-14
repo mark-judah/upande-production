@@ -23,6 +23,9 @@ interface SheetProps {
   /** Hide the built-in × close button (e.g. when a FAB is acting as the
    *  close affordance via the FAB→× morph). */
   hideCloseButton?: boolean;
+  /** The sheet sits above a tab bar that already clears the phone's bottom edge:
+   *  skip the safe-area padding so no blank band is left above the bar. */
+  aboveTabBar?: boolean;
   children: React.ReactNode;
 }
 
@@ -38,9 +41,11 @@ export function Sheet({
   title,
   subtitle,
   hideCloseButton,
+  aboveTabBar,
   children,
 }: SheetProps) {
-  const sheetBottom = useSheetBottomPadding();
+  const safeBottom = useSheetBottomPadding();
+  const sheetBottom = aboveTabBar ? spacing.sm : safeBottom;
   const screenH = Dimensions.get('window').height;
   const setSheetTopY = useUIStore((s) => s.setSheetTopY);
 
