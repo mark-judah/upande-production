@@ -1,9 +1,9 @@
 {
-  "id": "dad59329-4d2b-4f34-9483-503c59ff5142",
-  "createdAt": "2026-11-14T00:30:14.820Z",
+  "id": "6b667669-5b65-465c-bd34-1551f44b11cd",
+  "createdAt": "2026-11-18T17:39:29.562Z",
   "runtimeVersion": "101.5",
   "launchAsset": {
-    "hash": "OnEKRfBHStNeh9_Vxy17Bsh8bo96gr8EOt3CwVKWztE",
+    "hash": "jWC3T_OQCn3swePgXeKFFaYu98Qu4Qct0Zk8gzl3TGk",
     "key": "entry-c0ba4287e0ada84dc070af59e928a685",
     "contentType": "application/javascript",
     "fileExtension": ".hbc",
@@ -611,7 +611,7 @@
     "expoClient": {
       "name": "Upande Production",
       "slug": "upande-production",
-      "version": "1.5.1",
+      "version": "1.5.2",
       "platforms": [
         "ios",
         "android"
@@ -645,7 +645,7 @@
           "android.permission.FOREGROUND_SERVICE",
           "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
         ],
-        "versionCode": 105501
+        "versionCode": 105502
       },
       "plugins": [
         "./plugins/withReleaseSigning",
@@ -655,7 +655,8 @@
           "expo-build-properties",
           {
             "android": {
-              "usesCleartextTraffic": true
+              "usesCleartextTraffic": true,
+              "extraProguardRules": "-keep class com.google.mlkit.vision.barcode.** { *; }\n-keep class com.google.mlkit.vision.common.** { *; }"
             }
           }
         ],
@@ -718,7 +719,7 @@
       "runtimeVersion": "101.5",
       "sdkVersion": "58.0.0"
     },
-    "appVersion": "1.5.1",
-    "publishedAt": "2026-11-14T00:30:14.845Z"
+    "appVersion": "1.5.2",
+    "publishedAt": "2026-11-18T17:39:29.579Z"
   }
 }
