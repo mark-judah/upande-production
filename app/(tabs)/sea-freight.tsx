@@ -11,6 +11,7 @@ import { LabeledInput } from '@/src/components/LabeledInput';
 import { Sheet } from '@/src/components/Sheet';
 import { Spinner } from '@/src/components/Spinner';
 import { useToast } from '@/src/components/Toast';
+import { audio } from '@/src/audio';
 import { showDialog } from '@/src/components/DialogHost';
 import { setCameraResultCallback } from '@/src/components/CameraScannerScreen';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
@@ -533,6 +534,7 @@ function SeaFreightHarvestForm({
               showError('Please scan a valid bucket QR code.');
               return;
             }
+            audio.beep();
             setBucketId(parseScanned(raw, 'bucket'));
           })
         }
