@@ -449,6 +449,14 @@ function SeaFreightHarvestForm({
     setHeadSize(line.headSize || variety?.defaultHeadSize || '');
   }, [variety, line.headSize]);
 
+  // still to harvest: the planned share of the greenhouse picked, else the line's plan (its order without one)
+  const planned = line.plan.reduce((a, p) => a + p.stems, 0);
+  const share = line.plan.find((p) => p.greenhouse === greenhouse);
+  const left = Math.max(
+    0,
+    share ? share.stems - share.harvested : (planned || line.orderedStems) - line.harvestedStems,
+  );
+
   const submit = async () => {
     if (!farm || !greenhouse || !harvester || !stemLength || !bucketId || !quantity || !cutStage || (needsHeadSize && !headSize)) {
       showError('Fill all fields.');
@@ -582,10 +590,10 @@ function SeaFreightHarvestForm({
         }
       />
       <LabeledInput
-        label="Number of stems"
+        label={`Number of stems · ${fmt(left)} left`}
         value={quantity}
         onChangeText={(t) => setQuantity(t.replace(/[^0-9]/g, ''))}
-        placeholder={line.remainingStems ? String(line.remainingStems) : 'e.g. 100'}
+        placeholder={String(left)}
         keyboardType="number-pad"
         iconLeft="leaf-outline"
       />
