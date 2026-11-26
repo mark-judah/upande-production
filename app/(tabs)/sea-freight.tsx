@@ -194,13 +194,9 @@ export default function SeaFreightScreen() {
                   </View>
                 ) : null}
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.orderTitle} numberOfLines={1}>
-                    {o.orderName || o.customer}
-                  </Text>
+                  <Text style={s.orderTitle}>{o.orderName || o.customer}</Text>
                   {o.orderName ? (
-                    <Text style={s.orderCustomer} numberOfLines={1}>
-                      {o.customer}
-                    </Text>
+                    <Text style={s.orderCustomer}>{o.customer}</Text>
                   ) : null}
                 </View>
                 {o.team ? (
