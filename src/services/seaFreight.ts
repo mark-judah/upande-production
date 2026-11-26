@@ -8,6 +8,13 @@ export interface GrowingGreenhouse {
   area: number;
 }
 
+/** A greenhouse Allocation Planning planned the line to: its stems to cut and those cut so far. */
+export interface PlannedGreenhouse {
+  greenhouse: string;
+  stems: number;
+  harvested: number;
+}
+
 export interface SeaFreightLine {
   /** Sales Order Item row name. */
   name: string;
@@ -23,6 +30,8 @@ export interface SeaFreightLine {
   harvestedStems: number;
   remainingStems: number;
   greenhouses: GrowingGreenhouse[];
+  /** Where the line is planned to be cut (empty: not planned yet). */
+  plan: PlannedGreenhouse[];
 }
 
 export interface SeaFreightOrder {
@@ -51,6 +60,7 @@ interface RawLine {
   harvested_stems?: number;
   remaining_stems?: number;
   greenhouses?: Array<{ name?: string; label?: string; farm?: string; area?: number }>;
+  plan?: { greenhouse?: string; stems?: number; harvested?: number }[];
 }
 
 interface RawOrder {
@@ -104,6 +114,11 @@ export const seaFreightApi = {
           label: String(g.label ?? g.name ?? ''),
           farm: String(g.farm ?? ''),
           area: Number(g.area ?? 0),
+        })),
+        plan: (l.plan ?? []).map((p) => ({
+          greenhouse: String(p.greenhouse ?? ''),
+          stems: Number(p.stems ?? 0),
+          harvested: Number(p.harvested ?? 0),
         })),
       })),
     }));

@@ -227,6 +227,16 @@ export default function SeaFreightScreen() {
                           .join(' · ')}
                       </Text>
                     ) : null}
+                    {l.plan.length ? (
+                      <Text style={s.linePlan} numberOfLines={3}>
+                        {`Planned: ${l.plan
+                          .map((p) => {
+                            const label = l.greenhouses.find((g) => g.name === p.greenhouse)?.label ?? p.greenhouse;
+                            return `${label} ${fmt(p.harvested)}/${fmt(p.stems)}`;
+                          })
+                          .join(' · ')}`}
+                      </Text>
+                    ) : null}
                     <Text style={s.lineMeta}>
                       {l.remainingStems > 0 ? `${fmt(l.remainingStems)} stems to harvest` : 'Fully harvested'}
                       {l.boxes ? ` · ${l.boxes} boxes` : ''}
@@ -317,7 +327,11 @@ function SeaFreightHarvestForm({
     const names = new Set(line.greenhouses.map((g) => g.farm).filter(Boolean));
     return [...names].map((name) => ({ value: name, label: farms.find((f) => f.name === name)?.label ?? name }));
   }, [line.greenhouses, farms]);
-  const startHouse = line.greenhouses.find((g) => g.name === initialGreenhouse);
+  // the page's greenhouse filter, else the first planned greenhouse with stems still to cut there
+  const plannedNext = line.plan.find((p) => p.harvested < p.stems)?.greenhouse;
+  const startHouse =
+    line.greenhouses.find((g) => g.name === initialGreenhouse) ??
+    line.greenhouses.find((g) => g.name === plannedNext);
   const [farm, setFarm] = useState(
     startHouse?.farm ??
       (growingFarms.some((f) => f.value === initialFarm)
@@ -375,6 +389,16 @@ function SeaFreightHarvestForm({
     if (!Number.isFinite(qty) || qty <= 0) {
       showError('Quantity must be a positive number.');
       return;
+    }
+    if (line.plan.length && !line.plan.some((p) => p.greenhouse === greenhouse)) {
+      const label = line.greenhouses.find((g) => g.name === greenhouse)?.label ?? greenhouse;
+      const go = await new Promise<boolean>((resolve) =>
+        showDialog('Not planned for this order', `${label} is not planned for ${line.itemName} on this order. Harvest anyway?`, [
+          { text: 'No', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Harvest', onPress: () => resolve(true) },
+        ]),
+      );
+      if (!go) return;
     }
     const outcome = await createHarvest({
       farm,
@@ -524,6 +548,7 @@ const s = StyleSheet.create({
   lineQty: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
   lineSpec: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text },
   lineMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted },
+  linePlan: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text },
   bar: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
   barDone: { backgroundColor: colors.success },
