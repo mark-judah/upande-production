@@ -85,6 +85,16 @@ interface RawResponse {
 }
 
 export const seaFreightApi = {
+  /** The reasons an order may be finished under harvest (the Under Pack Reason list). */
+  async underHarvestReasons(): Promise<{ name: string; label: string }[]> {
+    const body = await api<{ data?: { reasons?: { name?: string; label?: string }[] } }>({
+      method: 'POST',
+      url: '/api/method/upande_agriculture.mobile.api.productionListUnderHarvestReasons',
+      data: {},
+    });
+    return (body.data?.reasons ?? []).map((r) => ({ name: String(r.name ?? ''), label: String(r.label ?? r.name ?? '') }));
+  },
+
   /** Open Sales Orders with Mode Of Transport = Sea Freight, soonest delivery first. */
   async listOrders(): Promise<SeaFreightOrder[]> {
     const body = await api<RawResponse>({
@@ -131,12 +141,13 @@ export const seaFreightApi = {
     }));
   },
 
-  /** Every line is 100% harvested: hand the order to the packhouse (it leaves this list). */
-  async markDone(salesOrder: string): Promise<string> {
+  /** Finish an order short of its plan (under harvest) with a reason: it goes to the packhouse as it is. An order
+   *  harvested to plan is finished by the server on its own. */
+  async markDone(salesOrder: string, reason?: string, notes?: string): Promise<string> {
     const body = await api<{ data?: { message?: string; error?: string } }>({
       method: 'POST',
       url: '/api/method/upande_agriculture.mobile.api.productionMarkSeaFreightDone',
-      data: { sales_order: salesOrder },
+      data: { sales_order: salesOrder, reason: reason ?? '', notes: notes ?? '' },
     });
     if (body.data?.error) throw new Error(body.data.error);
     return String(body.data?.message ?? 'Marked as harvested.');

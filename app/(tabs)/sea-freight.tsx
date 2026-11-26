@@ -39,6 +39,11 @@ export default function SeaFreightScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [harvesting, setHarvesting] = useState<{ order: SeaFreightOrder; line: SeaFreightLine } | null>(null);
   const [markingDone, setMarkingDone] = useState<string | null>(null);
+  // Under harvest: the order finished short of its plan, with a reason
+  const [under, setUnder] = useState<SeaFreightOrder | null>(null);
+  const [reasons, setReasons] = useState<{ name: string; label: string }[]>([]);
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
   const { showSuccess, showError } = useToast();
   const loadPickers = useCropCycleStore((s) => s.loadPickers);
   const farms = useCropCycleStore((s) => s.farms);
@@ -106,29 +111,29 @@ export default function SeaFreightScreen() {
     loadPickers();
   });
 
-  const markDone = (o: SeaFreightOrder) =>
-    showDialog(
-      'Mark harvest done',
-      `${o.orderName || o.customer} goes to the packhouse to be received.`,
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes',
-          onPress: async () => {
-            setMarkingDone(o.name);
-            try {
-              showSuccess(await seaFreightApi.markDone(o.name));
-              await load();
-            } catch (err) {
-              showError(mapAxiosError(err).message);
-            } finally {
-              setMarkingDone(null);
-            }
-          },
-        },
-      ],
-      { name: 'checkmark-done-outline', tone: 'success' },
-    );
+  const openUnder = (o: SeaFreightOrder) => {
+    setUnder(o);
+    setReason('');
+    setNotes('');
+    if (!reasons.length) seaFreightApi.underHarvestReasons().then(setReasons).catch(() => {});
+  };
+  const finishUnder = async () => {
+    if (!under) return;
+    if (!reason) {
+      showError('Pick the reason.');
+      return;
+    }
+    setMarkingDone(under.name);
+    try {
+      showSuccess(await seaFreightApi.markDone(under.name, reason, notes.trim()));
+      setUnder(null);
+      await load();
+    } catch (err) {
+      showError(mapAxiosError(err).message);
+    } finally {
+      setMarkingDone(null);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -263,14 +268,13 @@ export default function SeaFreightScreen() {
                   </Pressable>
                 );
               })}
-              {o.items.length > 0 && o.items.every((l) => l.harvestedStems >= l.orderedStems) ? (
-                <Button
-                  label="Mark harvest done"
-                  iconLeft="checkmark-done-outline"
-                  onPress={() => markDone(o)}
-                  loading={markingDone === o.name}
-                />
-              ) : null}
+              <Button
+                label="Under harvest"
+                variant="outline"
+                iconLeft="alert-circle-outline"
+                onPress={() => openUnder(o)}
+                loading={markingDone === o.name}
+              />
             </View>
           ))
         )}
@@ -306,6 +310,44 @@ export default function SeaFreightScreen() {
             }}
           />
           </KeyboardAwareScrollView>
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        aboveTabBar
+        visible={!!under}
+        onClose={() => setUnder(null)}
+        title="Under harvest"
+        subtitle={under ? [under.orderName, under.customer].filter(Boolean).join(' · ') : undefined}
+      >
+        {under ? (
+          <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
+            {under.items
+              .filter((l) => l.harvestedStems < l.plan.reduce((a, p) => a + p.stems, 0))
+              .map((l) => (
+                <View key={l.name} style={s.underRow}>
+                  <Text style={s.underVariety}>{l.itemName}</Text>
+                  <Text style={s.underQty}>
+                    {fmt(l.harvestedStems)}
+                    <Text style={s.metaOf}>{` / ${fmt(l.plan.reduce((a, p) => a + p.stems, 0))}`}</Text>
+                  </Text>
+                </View>
+              ))}
+            <Dropdown
+              label="Reason"
+              value={reason}
+              onChange={setReason}
+              options={reasons.map((r) => ({ value: r.name, label: r.label }))}
+              placeholder="Pick the reason"
+            />
+            <LabeledInput label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" />
+            <Button
+              label="Finish under harvest"
+              iconLeft="checkmark-done-outline"
+              onPress={finishUnder}
+              loading={markingDone === under.name}
+            />
+          </View>
         ) : null}
       </Sheet>
     </View>
@@ -616,6 +658,9 @@ const s = StyleSheet.create({
     overflow: 'hidden',
   },
   lineQty: { marginLeft: 'auto', fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
+  underRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  underVariety: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text, flexShrink: 1 },
+  underQty: { fontFamily: fontFamily.bold, fontSize: fontSize.sm, color: colors.text },
   lineSpec: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
   lineMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted },
   ghRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
