@@ -47,6 +47,8 @@ export interface SeaFreightOrder {
   /** Its place in Allocation Planning's sequence for the delivery day (0: not planned yet) and its team. */
   sequence: number;
   team: string;
+  /** pending: nothing harvested; in_progress: some; done: harvested to plan or finished under harvest. */
+  state: 'pending' | 'in_progress' | 'done';
   items: SeaFreightLine[];
 }
 
@@ -77,6 +79,7 @@ interface RawOrder {
   harvested_stems?: number;
   sequence?: number;
   team?: string;
+  state?: string;
   items?: RawLine[];
 }
 
@@ -114,6 +117,7 @@ export const seaFreightApi = {
       harvestedStems: Number(o.harvested_stems ?? 0),
       sequence: Number(o.sequence ?? 0),
       team: String(o.team ?? ''),
+      state: o.state === 'done' || o.state === 'in_progress' ? o.state : 'pending',
       items: (o.items ?? []).map((l) => ({
         name: String(l.name ?? ''),
         itemCode: String(l.item_code ?? ''),
