@@ -2,14 +2,16 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { Card, Alert } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { Dropdown } from '@/src/components/Dropdown';
 import { LabeledInput } from '@/src/components/LabeledInput';
-import { Pill } from '@/src/components/Pill';
 import { Sheet } from '@/src/components/Sheet';
 import { Spinner } from '@/src/components/Spinner';
 import { useToast } from '@/src/components/Toast';
+import { audio } from '@/src/audio';
 import { showDialog } from '@/src/components/DialogHost';
 import { setCameraResultCallback } from '@/src/components/CameraScannerScreen';
 import { borderRadius, colors, fontFamily, fontSize, spacing } from '@/src/theme';
@@ -37,6 +39,11 @@ export default function SeaFreightScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [harvesting, setHarvesting] = useState<{ order: SeaFreightOrder; line: SeaFreightLine } | null>(null);
   const [markingDone, setMarkingDone] = useState<string | null>(null);
+  // Under harvest: the order finished short of its plan, with a reason
+  const [under, setUnder] = useState<SeaFreightOrder | null>(null);
+  const [reasons, setReasons] = useState<{ name: string; label: string }[]>([]);
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
   const { showSuccess, showError } = useToast();
   const loadPickers = useCropCycleStore((s) => s.loadPickers);
   const farms = useCropCycleStore((s) => s.farms);
@@ -104,29 +111,29 @@ export default function SeaFreightScreen() {
     loadPickers();
   });
 
-  const markDone = (o: SeaFreightOrder) =>
-    showDialog(
-      'Mark harvest done',
-      `${o.orderName || o.customer} goes to the packhouse to be received.`,
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes',
-          onPress: async () => {
-            setMarkingDone(o.name);
-            try {
-              showSuccess(await seaFreightApi.markDone(o.name));
-              await load();
-            } catch (err) {
-              showError(mapAxiosError(err).message);
-            } finally {
-              setMarkingDone(null);
-            }
-          },
-        },
-      ],
-      { name: 'checkmark-done-outline', tone: 'success' },
-    );
+  const openUnder = (o: SeaFreightOrder) => {
+    setUnder(o);
+    setReason('');
+    setNotes('');
+    if (!reasons.length) seaFreightApi.underHarvestReasons().then(setReasons).catch(() => {});
+  };
+  const finishUnder = async () => {
+    if (!under) return;
+    if (!reason) {
+      showError('Pick the reason.');
+      return;
+    }
+    setMarkingDone(under.name);
+    try {
+      showSuccess(await seaFreightApi.markDone(under.name, reason, notes.trim()));
+      setUnder(null);
+      await load();
+    } catch (err) {
+      showError(mapAxiosError(err).message);
+    } finally {
+      setMarkingDone(null);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -187,16 +194,38 @@ export default function SeaFreightScreen() {
           visibleOrders.map((o) => (
             <View key={o.name} style={s.order}>
               <View style={s.orderHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.orderTitle} numberOfLines={1}>{o.orderName || o.customer}</Text>
-                  <Text style={s.orderSub}>
-                    {[o.orderName ? o.customer : '', o.name, `Delivery ${o.deliveryDate}`].filter(Boolean).join(' · ')}
+                {o.sequence > 0 ? (
+                  <View style={s.seqBadge}>
+                    <Text style={s.seqNum}>{`#${o.sequence}`}</Text>
+                  </View>
+                ) : null}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.orderTitle}>{o.orderName || o.customer}</Text>
+                  {o.orderName ? (
+                    <Text style={s.orderCustomer}>{o.customer}</Text>
+                  ) : null}
+                </View>
+                {o.team ? (
+                  <View style={s.teamChip}>
+                    <Ionicons name="people-outline" size={13} color={colors.text} />
+                    <Text style={s.teamText} numberOfLines={1}>
+                      {o.team}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={s.metaRow}>
+                <View style={s.metaBox}>
+                  <Text style={s.metaLabel}>Delivery</Text>
+                  <Text style={s.metaValue}>{prettyDay(o.deliveryDate)}</Text>
+                </View>
+                <View style={s.metaBox}>
+                  <Text style={s.metaLabel}>Stems harvested</Text>
+                  <Text style={s.metaValue}>
+                    {fmt(o.harvestedStems)}
+                    <Text style={s.metaOf}>{` / ${fmt(o.orderedStems)}`}</Text>
                   </Text>
                 </View>
-                <Pill
-                  value={`${fmt(o.harvestedStems)}/${fmt(o.orderedStems)}`}
-                  tone={o.orderedStems > 0 && o.harvestedStems >= o.orderedStems ? 'success' : 'neutral'}
-                />
               </View>
               {o.items.map((l) => {
                 const pct = l.orderedStems > 0 ? Math.min(l.harvestedStems / l.orderedStems, 1) : 0;
@@ -208,41 +237,44 @@ export default function SeaFreightScreen() {
                   >
                     <View style={s.lineHeader}>
                       <Text style={s.lineTitle} numberOfLines={1}>
-                        {[l.itemName, l.stemLength].filter(Boolean).join(' · ')}
+                        {l.itemName}
                       </Text>
-                      <Text style={s.lineQty}>{`${fmt(l.harvestedStems)} / ${fmt(l.orderedStems)}`}</Text>
+                      {l.stemLength ? <Text style={s.lenChip}>{l.stemLength}</Text> : null}
+                      <Text style={s.lineQty}>
+                        {fmt(l.harvestedStems)}
+                        <Text style={s.metaOf}>{` / ${fmt(l.orderedStems)}`}</Text>
+                      </Text>
                     </View>
                     <View style={s.bar}>
                       <View style={[s.barFill, { width: `${pct * 100}%` }, pct >= 1 && s.barDone]} />
                     </View>
-                    {l.cutStage || l.headSize || l.spec ? (
-                      <Text style={s.lineSpec} numberOfLines={2}>
-                        {[
-                          l.stemLength ? `Length ${l.stemLength}` : '',
-                          l.cutStage ? `Cut stage ${l.cutStage}` : '',
-                          l.headSize ? `Head ${l.headSize}` : '',
-                          l.spec ? `Spec ${l.spec}` : '',
-                        ]
+                    {l.cutStage || l.headSize ? (
+                      <Text style={s.lineSpec} numberOfLines={1}>
+                        {[l.cutStage ? `Cut stage ${l.cutStage}` : '', l.headSize ? `Head ${l.headSize}` : '']
                           .filter(Boolean)
                           .join(' · ')}
                       </Text>
                     ) : null}
-                    <Text style={s.lineMeta}>
-                      {l.remainingStems > 0 ? `${fmt(l.remainingStems)} stems to harvest` : 'Fully harvested'}
-                      {l.boxes ? ` · ${l.boxes} boxes` : ''}
-                      {` · ${l.greenhouses.length ? `in ${l.greenhouses.length} greenhouse${l.greenhouses.length === 1 ? '' : 's'}` : 'no crop cycle'}`}
-                    </Text>
+                    <View style={s.ghRow}>
+                      {l.plan.map((p) => (
+                        <View key={p.greenhouse} style={[s.ghChip, p.harvested >= p.stems && s.ghChipDone]}>
+                          <Text style={s.ghText} numberOfLines={1}>
+                            {l.greenhouses.find((g) => g.name === p.greenhouse)?.label ?? p.greenhouse}
+                          </Text>
+                          <Text style={s.ghQty}>{`${fmt(p.harvested)}/${fmt(p.stems)}`}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </Pressable>
                 );
               })}
-              {o.items.length > 0 && o.items.every((l) => l.harvestedStems >= l.orderedStems) ? (
-                <Button
-                  label="Mark harvest done"
-                  iconLeft="checkmark-done-outline"
-                  onPress={() => markDone(o)}
-                  loading={markingDone === o.name}
-                />
-              ) : null}
+              <Button
+                label="Under harvest"
+                variant="outline"
+                iconLeft="alert-circle-outline"
+                onPress={() => openUnder(o)}
+                loading={markingDone === o.name}
+              />
             </View>
           ))
         )}
@@ -280,8 +312,55 @@ export default function SeaFreightScreen() {
           </KeyboardAwareScrollView>
         ) : null}
       </Sheet>
+
+      <Sheet
+        aboveTabBar
+        visible={!!under}
+        onClose={() => setUnder(null)}
+        title="Under harvest"
+        subtitle={under ? [under.orderName, under.customer].filter(Boolean).join(' · ') : undefined}
+      >
+        {under ? (
+          <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
+            {under.items
+              .filter((l) => l.harvestedStems < l.plan.reduce((a, p) => a + p.stems, 0))
+              .map((l) => (
+                <View key={l.name} style={s.underRow}>
+                  <Text style={s.underVariety}>{l.itemName}</Text>
+                  <Text style={s.underQty}>
+                    {fmt(l.harvestedStems)}
+                    <Text style={s.metaOf}>{` / ${fmt(l.plan.reduce((a, p) => a + p.stems, 0))}`}</Text>
+                  </Text>
+                </View>
+              ))}
+            <Dropdown
+              label="Reason"
+              value={reason}
+              onChange={setReason}
+              options={reasons.map((r) => ({ value: r.name, label: r.label }))}
+              placeholder="Pick the reason"
+            />
+            <LabeledInput label="Notes" value={notes} onChangeText={setNotes} placeholder="Optional" />
+            <Button
+              label="Finish under harvest"
+              iconLeft="checkmark-done-outline"
+              onPress={finishUnder}
+              loading={markingDone === under.name}
+            />
+          </View>
+        ) : null}
+      </Sheet>
     </View>
   );
+}
+
+/** "Fri, 28 Nov" for an ISO date. */
+function prettyDay(iso: string): string {
+  try {
+    return format(new Date(`${iso}T00:00:00`), 'EEE, d MMM');
+  } catch {
+    return iso;
+  }
 }
 
 function SeaFreightHarvestForm({
@@ -317,7 +396,11 @@ function SeaFreightHarvestForm({
     const names = new Set(line.greenhouses.map((g) => g.farm).filter(Boolean));
     return [...names].map((name) => ({ value: name, label: farms.find((f) => f.name === name)?.label ?? name }));
   }, [line.greenhouses, farms]);
-  const startHouse = line.greenhouses.find((g) => g.name === initialGreenhouse);
+  // the page's greenhouse filter, else the first planned greenhouse with stems still to harvest there
+  const plannedNext = line.plan.find((p) => p.harvested < p.stems)?.greenhouse;
+  const startHouse =
+    line.greenhouses.find((g) => g.name === initialGreenhouse) ??
+    line.greenhouses.find((g) => g.name === plannedNext);
   const [farm, setFarm] = useState(
     startHouse?.farm ??
       (growingFarms.some((f) => f.value === initialFarm)
@@ -366,6 +449,14 @@ function SeaFreightHarvestForm({
     setHeadSize(line.headSize || variety?.defaultHeadSize || '');
   }, [variety, line.headSize]);
 
+  // still to harvest: the planned share of the greenhouse picked, else the line's plan (its order without one)
+  const planned = line.plan.reduce((a, p) => a + p.stems, 0);
+  const share = line.plan.find((p) => p.greenhouse === greenhouse);
+  const left = Math.max(
+    0,
+    share ? share.stems - share.harvested : (planned || line.orderedStems) - line.harvestedStems,
+  );
+
   const submit = async () => {
     if (!farm || !greenhouse || !harvester || !stemLength || !bucketId || !quantity || !cutStage || (needsHeadSize && !headSize)) {
       showError('Fill all fields.');
@@ -375,6 +466,16 @@ function SeaFreightHarvestForm({
     if (!Number.isFinite(qty) || qty <= 0) {
       showError('Quantity must be a positive number.');
       return;
+    }
+    if (line.plan.length && !line.plan.some((p) => p.greenhouse === greenhouse)) {
+      const label = line.greenhouses.find((g) => g.name === greenhouse)?.label ?? greenhouse;
+      const go = await new Promise<boolean>((resolve) =>
+        showDialog('Not planned for this order', `${label} is not planned for ${line.itemName} on this order. Harvest anyway?`, [
+          { text: 'No', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Harvest', onPress: () => resolve(true) },
+        ]),
+      );
+      if (!go) return;
     }
     const outcome = await createHarvest({
       farm,
@@ -483,15 +584,16 @@ function SeaFreightHarvestForm({
               showError('Please scan a valid bucket QR code.');
               return;
             }
+            audio.beep();
             setBucketId(parseScanned(raw, 'bucket'));
           })
         }
       />
       <LabeledInput
-        label="Number of stems"
+        label={`Number of stems · ${fmt(left)} left`}
         value={quantity}
         onChangeText={(t) => setQuantity(t.replace(/[^0-9]/g, ''))}
-        placeholder={line.remainingStems ? String(line.remainingStems) : 'e.g. 100'}
+        placeholder={String(left)}
         keyboardType="number-pad"
         iconLeft="leaf-outline"
       />
@@ -504,26 +606,85 @@ const s = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: 96, gap: spacing.md },
   order: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     padding: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   orderHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  orderTitle: { fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
-  orderSub: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
+  seqBadge: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  seqNum: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.textOnPrimary },
+  orderTitle: { fontFamily: fontFamily.bold, fontSize: fontSize.lg, color: colors.text },
+  orderCustomer: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 1 },
+  teamChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: 130,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  teamText: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.text },
+  metaRow: { flexDirection: 'row', gap: spacing.sm },
+  metaBox: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  metaLabel: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
+  metaValue: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text, marginTop: 2 },
+  metaOf: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textMuted },
   line: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: spacing.sm,
-    gap: 4,
+    gap: 6,
   },
   lineHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  lineTitle: { flex: 1, fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.text },
-  lineQty: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
-  lineSpec: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text },
+  lineTitle: { flexShrink: 1, fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
+  lenChip: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: fontSize.xs,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  lineQty: { marginLeft: 'auto', fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
+  underRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  underVariety: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text, flexShrink: 1 },
+  underQty: { fontFamily: fontFamily.bold, fontSize: fontSize.sm, color: colors.text },
+  lineSpec: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
   lineMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted },
+  ghRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  ghChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  ghChipDone: { borderColor: colors.success },
+  ghText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text, maxWidth: 150 },
+  ghQty: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.textSecondary },
   bar: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
   barDone: { backgroundColor: colors.success },

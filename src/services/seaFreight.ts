@@ -8,6 +8,13 @@ export interface GrowingGreenhouse {
   area: number;
 }
 
+/** A greenhouse Allocation Planning planned the line to: its stems to harvest and those harvested so far. */
+export interface PlannedGreenhouse {
+  greenhouse: string;
+  stems: number;
+  harvested: number;
+}
+
 export interface SeaFreightLine {
   /** Sales Order Item row name. */
   name: string;
@@ -23,6 +30,8 @@ export interface SeaFreightLine {
   harvestedStems: number;
   remainingStems: number;
   greenhouses: GrowingGreenhouse[];
+  /** Where the line is planned to be harvested (empty: not planned yet). */
+  plan: PlannedGreenhouse[];
 }
 
 export interface SeaFreightOrder {
@@ -35,6 +44,9 @@ export interface SeaFreightOrder {
   status: string;
   orderedStems: number;
   harvestedStems: number;
+  /** Its place in Allocation Planning's sequence for the delivery day (0: not planned yet) and its team. */
+  sequence: number;
+  team: string;
   items: SeaFreightLine[];
 }
 
@@ -51,6 +63,7 @@ interface RawLine {
   harvested_stems?: number;
   remaining_stems?: number;
   greenhouses?: Array<{ name?: string; label?: string; farm?: string; area?: number }>;
+  plan?: { greenhouse?: string; stems?: number; harvested?: number }[];
 }
 
 interface RawOrder {
@@ -62,6 +75,8 @@ interface RawOrder {
   status?: string;
   ordered_stems?: number;
   harvested_stems?: number;
+  sequence?: number;
+  team?: string;
   items?: RawLine[];
 }
 
@@ -70,6 +85,16 @@ interface RawResponse {
 }
 
 export const seaFreightApi = {
+  /** The reasons an order may be finished under harvest (the Under Pack Reason list). */
+  async underHarvestReasons(): Promise<{ name: string; label: string }[]> {
+    const body = await api<{ data?: { reasons?: { name?: string; label?: string }[] } }>({
+      method: 'POST',
+      url: '/api/method/upande_agriculture.mobile.api.productionListUnderHarvestReasons',
+      data: {},
+    });
+    return (body.data?.reasons ?? []).map((r) => ({ name: String(r.name ?? ''), label: String(r.label ?? r.name ?? '') }));
+  },
+
   /** Open Sales Orders with Mode Of Transport = Sea Freight, soonest delivery first. */
   async listOrders(): Promise<SeaFreightOrder[]> {
     const body = await api<RawResponse>({
@@ -87,6 +112,8 @@ export const seaFreightApi = {
       status: String(o.status ?? ''),
       orderedStems: Number(o.ordered_stems ?? 0),
       harvestedStems: Number(o.harvested_stems ?? 0),
+      sequence: Number(o.sequence ?? 0),
+      team: String(o.team ?? ''),
       items: (o.items ?? []).map((l) => ({
         name: String(l.name ?? ''),
         itemCode: String(l.item_code ?? ''),
@@ -105,16 +132,22 @@ export const seaFreightApi = {
           farm: String(g.farm ?? ''),
           area: Number(g.area ?? 0),
         })),
+        plan: (l.plan ?? []).map((p) => ({
+          greenhouse: String(p.greenhouse ?? ''),
+          stems: Number(p.stems ?? 0),
+          harvested: Number(p.harvested ?? 0),
+        })),
       })),
     }));
   },
 
-  /** Every line is 100% harvested: hand the order to the packhouse (it leaves this list). */
-  async markDone(salesOrder: string): Promise<string> {
+  /** Finish an order short of its plan (under harvest) with a reason: it goes to the packhouse as it is. An order
+   *  harvested to plan is finished by the server on its own. */
+  async markDone(salesOrder: string, reason?: string, notes?: string): Promise<string> {
     const body = await api<{ data?: { message?: string; error?: string } }>({
       method: 'POST',
       url: '/api/method/upande_agriculture.mobile.api.productionMarkSeaFreightDone',
-      data: { sales_order: salesOrder },
+      data: { sales_order: salesOrder, reason: reason ?? '', notes: notes ?? '' },
     });
     if (body.data?.error) throw new Error(body.data.error);
     return String(body.data?.message ?? 'Marked as harvested.');
