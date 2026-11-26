@@ -1,13 +1,13 @@
 {
-  "id": "561fdcaa-ff9f-4e7b-9d33-3259ddc213f5",
-  "createdAt": "2026-11-26T20:19:18.141Z",
+  "id": "f313550b-5b20-418c-9fb9-a391c433862e",
+  "createdAt": "2026-11-26T21:01:18.699Z",
   "runtimeVersion": "101.5",
   "launchAsset": {
-    "hash": "0uoawcGlOIw6wJwz-lUxCDYgcAEbZ1F3R-UcsZN0Ut0",
-    "key": "entry-53d487640fe688e35fc69c68a3ec43f5",
+    "hash": "1lV-Wpbg6os0SNv8SAYB8Fg7gJhNMEOKBRvZRlIWbEE",
+    "key": "entry-1d872c0cef165aad112930e5ee6e4ac4",
     "contentType": "application/javascript",
     "fileExtension": ".hbc",
-    "url": "https://mark-judah.github.io/upande-production/ota/android/101.5/_expo/static/js/android/entry-53d487640fe688e35fc69c68a3ec43f5.hbc"
+    "url": "https://mark-judah.github.io/upande-production/ota/android/101.5/_expo/static/js/android/entry-1d872c0cef165aad112930e5ee6e4ac4.hbc"
   },
   "assets": [
     {
@@ -611,7 +611,7 @@
     "expoClient": {
       "name": "Upande Production",
       "slug": "upande-production",
-      "version": "1.5.4",
+      "version": "1.5.5",
       "platforms": [
         "ios",
         "android"
@@ -645,7 +645,7 @@
           "android.permission.FOREGROUND_SERVICE",
           "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
         ],
-        "versionCode": 105504
+        "versionCode": 105505
       },
       "plugins": [
         "./plugins/withReleaseSigning",
@@ -719,7 +719,7 @@
       "runtimeVersion": "101.5",
       "sdkVersion": "58.0.0"
     },
-    "appVersion": "1.5.4",
-    "publishedAt": "2026-11-26T20:19:18.164Z"
+    "appVersion": "1.5.5",
+    "publishedAt": "2026-11-26T21:01:18.726Z"
   }
 }
