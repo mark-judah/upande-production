@@ -218,7 +218,7 @@ export default function SeaFreightScreen() {
                   <Text style={s.metaValue}>{prettyDay(o.deliveryDate)}</Text>
                 </View>
                 <View style={s.metaBox}>
-                  <Text style={s.metaLabel}>Stems cut</Text>
+                  <Text style={s.metaLabel}>Stems harvested</Text>
                   <Text style={s.metaValue}>
                     {fmt(o.harvestedStems)}
                     <Text style={s.metaOf}>{` / ${fmt(o.orderedStems)}`}</Text>
@@ -357,7 +357,7 @@ function SeaFreightHarvestForm({
     const names = new Set(line.greenhouses.map((g) => g.farm).filter(Boolean));
     return [...names].map((name) => ({ value: name, label: farms.find((f) => f.name === name)?.label ?? name }));
   }, [line.greenhouses, farms]);
-  // the page's greenhouse filter, else the first planned greenhouse with stems still to cut there
+  // the page's greenhouse filter, else the first planned greenhouse with stems still to harvest there
   const plannedNext = line.plan.find((p) => p.harvested < p.stems)?.greenhouse;
   const startHouse =
     line.greenhouses.find((g) => g.name === initialGreenhouse) ??

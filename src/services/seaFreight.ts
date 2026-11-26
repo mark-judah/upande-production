@@ -8,7 +8,7 @@ export interface GrowingGreenhouse {
   area: number;
 }
 
-/** A greenhouse Allocation Planning planned the line to: its stems to cut and those cut so far. */
+/** A greenhouse Allocation Planning planned the line to: its stems to harvest and those harvested so far. */
 export interface PlannedGreenhouse {
   greenhouse: string;
   stems: number;
@@ -30,7 +30,7 @@ export interface SeaFreightLine {
   harvestedStems: number;
   remainingStems: number;
   greenhouses: GrowingGreenhouse[];
-  /** Where the line is planned to be cut (empty: not planned yet). */
+  /** Where the line is planned to be harvested (empty: not planned yet). */
   plan: PlannedGreenhouse[];
 }
 
