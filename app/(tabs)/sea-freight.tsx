@@ -2,11 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { Card, Alert } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { Dropdown } from '@/src/components/Dropdown';
 import { LabeledInput } from '@/src/components/LabeledInput';
-import { Pill } from '@/src/components/Pill';
 import { Sheet } from '@/src/components/Sheet';
 import { Spinner } from '@/src/components/Spinner';
 import { useToast } from '@/src/components/Toast';
@@ -188,18 +189,41 @@ export default function SeaFreightScreen() {
             <View key={o.name} style={s.order}>
               <View style={s.orderHeader}>
                 {o.sequence > 0 ? (
-                  <Text style={s.seqChip}>{`#${o.sequence}${o.team ? ` · ${o.team}` : ''}`}</Text>
+                  <View style={s.seqBadge}>
+                    <Text style={s.seqNum}>{`#${o.sequence}`}</Text>
+                  </View>
                 ) : null}
-                <View style={{ flex: 1 }}>
-                  <Text style={s.orderTitle} numberOfLines={1}>{o.orderName || o.customer}</Text>
-                  <Text style={s.orderSub}>
-                    {[o.orderName ? o.customer : '', o.name, `Delivery ${o.deliveryDate}`].filter(Boolean).join(' · ')}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.orderTitle} numberOfLines={1}>
+                    {o.orderName || o.customer}
+                  </Text>
+                  {o.orderName ? (
+                    <Text style={s.orderCustomer} numberOfLines={1}>
+                      {o.customer}
+                    </Text>
+                  ) : null}
+                </View>
+                {o.team ? (
+                  <View style={s.teamChip}>
+                    <Ionicons name="people-outline" size={13} color={colors.text} />
+                    <Text style={s.teamText} numberOfLines={1}>
+                      {o.team}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={s.metaRow}>
+                <View style={s.metaBox}>
+                  <Text style={s.metaLabel}>Delivery</Text>
+                  <Text style={s.metaValue}>{prettyDay(o.deliveryDate)}</Text>
+                </View>
+                <View style={s.metaBox}>
+                  <Text style={s.metaLabel}>Stems cut</Text>
+                  <Text style={s.metaValue}>
+                    {fmt(o.harvestedStems)}
+                    <Text style={s.metaOf}>{` / ${fmt(o.orderedStems)}`}</Text>
                   </Text>
                 </View>
-                <Pill
-                  value={`${fmt(o.harvestedStems)}/${fmt(o.orderedStems)}`}
-                  tone={o.orderedStems > 0 && o.harvestedStems >= o.orderedStems ? 'success' : 'neutral'}
-                />
               </View>
               {o.items.map((l) => {
                 const pct = l.orderedStems > 0 ? Math.min(l.harvestedStems / l.orderedStems, 1) : 0;
@@ -211,40 +235,34 @@ export default function SeaFreightScreen() {
                   >
                     <View style={s.lineHeader}>
                       <Text style={s.lineTitle} numberOfLines={1}>
-                        {[l.itemName, l.stemLength].filter(Boolean).join(' · ')}
+                        {l.itemName}
                       </Text>
-                      <Text style={s.lineQty}>{`${fmt(l.harvestedStems)} / ${fmt(l.orderedStems)}`}</Text>
+                      {l.stemLength ? <Text style={s.lenChip}>{l.stemLength}</Text> : null}
+                      <Text style={s.lineQty}>
+                        {fmt(l.harvestedStems)}
+                        <Text style={s.metaOf}>{` / ${fmt(l.orderedStems)}`}</Text>
+                      </Text>
                     </View>
                     <View style={s.bar}>
                       <View style={[s.barFill, { width: `${pct * 100}%` }, pct >= 1 && s.barDone]} />
                     </View>
-                    {l.cutStage || l.headSize || l.spec ? (
-                      <Text style={s.lineSpec} numberOfLines={2}>
-                        {[
-                          l.stemLength ? `Length ${l.stemLength}` : '',
-                          l.cutStage ? `Cut stage ${l.cutStage}` : '',
-                          l.headSize ? `Head ${l.headSize}` : '',
-                          l.spec ? `Spec ${l.spec}` : '',
-                        ]
+                    {l.cutStage || l.headSize ? (
+                      <Text style={s.lineSpec} numberOfLines={1}>
+                        {[l.cutStage ? `Cut stage ${l.cutStage}` : '', l.headSize ? `Head ${l.headSize}` : '']
                           .filter(Boolean)
                           .join(' · ')}
                       </Text>
                     ) : null}
-                    {l.plan.length ? (
-                      <Text style={s.linePlan} numberOfLines={3}>
-                        {`Planned: ${l.plan
-                          .map((p) => {
-                            const label = l.greenhouses.find((g) => g.name === p.greenhouse)?.label ?? p.greenhouse;
-                            return `${label} ${fmt(p.harvested)}/${fmt(p.stems)}`;
-                          })
-                          .join(' · ')}`}
-                      </Text>
-                    ) : null}
-                    <Text style={s.lineMeta}>
-                      {l.remainingStems > 0 ? `${fmt(l.remainingStems)} stems to harvest` : 'Fully harvested'}
-                      {l.boxes ? ` · ${l.boxes} boxes` : ''}
-                      {` · ${l.greenhouses.length ? `in ${l.greenhouses.length} greenhouse${l.greenhouses.length === 1 ? '' : 's'}` : 'no crop cycle'}`}
-                    </Text>
+                    <View style={s.ghRow}>
+                      {l.plan.map((p) => (
+                        <View key={p.greenhouse} style={[s.ghChip, p.harvested >= p.stems && s.ghChipDone]}>
+                          <Text style={s.ghText} numberOfLines={1}>
+                            {l.greenhouses.find((g) => g.name === p.greenhouse)?.label ?? p.greenhouse}
+                          </Text>
+                          <Text style={s.ghQty}>{`${fmt(p.harvested)}/${fmt(p.stems)}`}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -295,6 +313,15 @@ export default function SeaFreightScreen() {
       </Sheet>
     </View>
   );
+}
+
+/** "Fri, 28 Nov" for an ISO date. */
+function prettyDay(iso: string): string {
+  try {
+    return format(new Date(`${iso}T00:00:00`), 'EEE, d MMM');
+  } catch {
+    return iso;
+  }
 }
 
 function SeaFreightHarvestForm({
@@ -531,15 +558,56 @@ const s = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: 96, gap: spacing.md },
   order: {
     backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     padding: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   orderHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  orderTitle: { fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
-  seqChip: {
+  seqBadge: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  seqNum: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.textOnPrimary },
+  orderTitle: { fontFamily: fontFamily.bold, fontSize: fontSize.lg, color: colors.text },
+  orderCustomer: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 1 },
+  teamChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: 130,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  teamText: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.text },
+  metaRow: { flexDirection: 'row', gap: spacing.sm },
+  metaBox: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  metaLabel: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
+  metaValue: { fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text, marginTop: 2 },
+  metaOf: { fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.textMuted },
+  line: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+    gap: 6,
+  },
+  lineHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  lineTitle: { flexShrink: 1, fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
+  lenChip: {
     fontFamily: fontFamily.semiBold,
     fontSize: fontSize.xs,
     color: colors.text,
@@ -549,19 +617,23 @@ const s = StyleSheet.create({
     paddingVertical: 2,
     overflow: 'hidden',
   },
-  orderSub: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
-  line: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
-    gap: 4,
-  },
-  lineHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  lineTitle: { flex: 1, fontFamily: fontFamily.medium, fontSize: fontSize.sm, color: colors.text },
-  lineQty: { fontFamily: fontFamily.semiBold, fontSize: fontSize.sm, color: colors.text },
-  lineSpec: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text },
+  lineQty: { marginLeft: 'auto', fontFamily: fontFamily.bold, fontSize: fontSize.md, color: colors.text },
+  lineSpec: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.textSecondary },
   lineMeta: { fontFamily: fontFamily.regular, fontSize: fontSize.xs, color: colors.textMuted },
-  linePlan: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text },
+  ghRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  ghChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  ghChipDone: { borderColor: colors.success },
+  ghText: { fontFamily: fontFamily.medium, fontSize: fontSize.xs, color: colors.text, maxWidth: 150 },
+  ghQty: { fontFamily: fontFamily.semiBold, fontSize: fontSize.xs, color: colors.textSecondary },
   bar: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
   barDone: { backgroundColor: colors.success },
