@@ -187,6 +187,9 @@ export default function SeaFreightScreen() {
           visibleOrders.map((o) => (
             <View key={o.name} style={s.order}>
               <View style={s.orderHeader}>
+                {o.sequence > 0 ? (
+                  <Text style={s.seqChip}>{`#${o.sequence}${o.team ? ` · ${o.team}` : ''}`}</Text>
+                ) : null}
                 <View style={{ flex: 1 }}>
                   <Text style={s.orderTitle} numberOfLines={1}>{o.orderName || o.customer}</Text>
                   <Text style={s.orderSub}>
@@ -536,6 +539,16 @@ const s = StyleSheet.create({
   },
   orderHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   orderTitle: { fontFamily: fontFamily.semiBold, fontSize: fontSize.md, color: colors.text },
+  seqChip: {
+    fontFamily: fontFamily.semiBold,
+    fontSize: fontSize.xs,
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
   orderSub: { fontFamily: fontFamily.regular, fontSize: fontSize.sm, color: colors.textSecondary, marginTop: 2 },
   line: {
     borderTopWidth: StyleSheet.hairlineWidth,
