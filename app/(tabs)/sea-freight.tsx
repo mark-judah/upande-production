@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { Card, Alert } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { Dropdown } from '@/src/components/Dropdown';
+import { Segmented } from '@/src/components/Segmented';
 import { LabeledInput } from '@/src/components/LabeledInput';
 import { Sheet } from '@/src/components/Sheet';
 import { Spinner } from '@/src/components/Spinner';
@@ -86,13 +87,17 @@ export default function SeaFreightScreen() {
       l.greenhouses.some((g) => (!farmFilter || g.farm === farmFilter) && (!greenhouseFilter || g.name === greenhouseFilter)),
     [farmFilter, greenhouseFilter],
   );
-  const visibleOrders = useMemo(
+  // Pending (nothing harvested), In progress (some harvested), Done (harvested to plan or under harvest)
+  const [stateFilter, setStateFilter] = useState<SeaFreightOrder['state']>('pending');
+  const farmOrders = useMemo(
     () =>
       orders
         .map((o) => ({ ...o, items: o.items.filter(lineMatches) }))
         .filter((o) => o.items.length > 0),
     [orders, lineMatches],
   );
+  const stateCount = (st: SeaFreightOrder['state']) => farmOrders.filter((o) => o.state === st).length;
+  const visibleOrders = useMemo(() => farmOrders.filter((o) => o.state === stateFilter), [farmOrders, stateFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -179,6 +184,16 @@ export default function SeaFreightScreen() {
           </View>
         </View>
 
+        <Segmented
+          value={stateFilter}
+          onChange={setStateFilter}
+          options={[
+            { value: 'pending', label: `Pending (${stateCount('pending')})` },
+            { value: 'in_progress', label: `In progress (${stateCount('in_progress')})` },
+            { value: 'done', label: `Done (${stateCount('done')})` },
+          ]}
+        />
+
         {error ? <Alert tone="danger">{error}</Alert> : null}
         {loading && orders.length === 0 ? (
           <Card>
@@ -187,7 +202,13 @@ export default function SeaFreightScreen() {
         ) : visibleOrders.length === 0 && !error ? (
           <Card>
             <Alert tone="info">
-              {orders.length === 0 ? 'No open sea freight orders.' : 'No sea freight orders for this farm or greenhouse.'}
+              {orders.length === 0
+                ? 'No sea freight orders from tomorrow on.'
+                : stateFilter === 'done'
+                  ? 'No sea freight orders done.'
+                  : stateFilter === 'in_progress'
+                    ? 'No sea freight orders in progress.'
+                    : 'No sea freight orders pending.'}
             </Alert>
           </Card>
         ) : (
@@ -232,6 +253,7 @@ export default function SeaFreightScreen() {
                 return (
                   <Pressable
                     key={l.name}
+                    disabled={o.state === 'done'}
                     onPress={() => setHarvesting({ order: o, line: l })}
                     style={({ pressed }) => [s.line, pressed && { opacity: 0.7 }]}
                   >
@@ -268,13 +290,15 @@ export default function SeaFreightScreen() {
                   </Pressable>
                 );
               })}
-              <Button
-                label="Under harvest"
-                variant="outline"
-                iconLeft="alert-circle-outline"
-                onPress={() => openUnder(o)}
-                loading={markingDone === o.name}
-              />
+              {o.state === 'done' ? null : (
+                <Button
+                  label="Under harvest"
+                  variant="outline"
+                  iconLeft="alert-circle-outline"
+                  onPress={() => openUnder(o)}
+                  loading={markingDone === o.name}
+                />
+              )}
             </View>
           ))
         )}
